@@ -1,0 +1,89 @@
+# .clinerules - Project Intelligence for Probot Aider Bot
+
+## Code Style Preferences
+
+1. Use TypeScript for all new code
+   - Explicit types for all function parameters and return values
+   - Interface definitions for complex data structures
+   - Use `type` for simple unions and type aliases
+
+2. Async/Await Pattern
+   - Prefer async/await over raw promises
+   - Use try/catch blocks for error handling
+   - Always clean up resources in finally blocks
+
+3. Error Handling
+   - Create specific error types for different failure modes
+   - Include context information in error messages
+   - Log errors before throwing or returning
+
+4. Logging Standards
+   - Use structured logging with context information
+   - Include correlation IDs for request tracking
+   - Different log levels for different severity
+
+## Project-Specific Patterns
+
+1. Event Handler Structure
+   - Handlers should be thin orchestrators
+   - Business logic should be in service classes
+   - Each handler should have a single responsibility
+
+2. GitHub Client Usage
+   - Always use the GitHub client for API operations
+   - Handle rate limiting at the client level
+   - Standardize error formats from GitHub API
+
+3. Aider Client Usage
+   - Always initialize Aider client before use
+   - Clean up resources after operations
+   - Capture all Aider output for debugging
+
+4. Configuration Management
+   - Default configuration in code
+   - Override with environment variables
+   - Repository-level configuration takes precedence
+
+## Implementation Guidelines
+
+1. Temporary Directory Management
+   - Create directories with secure random names
+   - Clean up directories after use, even during errors
+   - Use OS-specific temp directories
+
+2. Git Operations
+   - Use execa for Git command execution
+   - Always check command exit codes
+   - Handle authentication via HTTPS tokens
+
+3. Pull Request Creation
+   - Include issue references in PR titles
+   - Use detailed descriptions with context
+   - Add labels to indicate automated PRs
+
+4. Issue Comment Templates
+   - Keep comments concise and informative
+   - Include links to relevant resources
+   - Use markdown formatting for readability
+
+## Known Challenges
+
+1. Aider Version Dependencies
+   - Aider CLI interface may change
+   - Different versions may have different behaviors
+   - Version checking should be part of initialization
+
+2. GitHub API Rate Limiting
+   - Implement exponential backoff for retries
+   - Cache immutable data when possible
+   - Monitor rate limit headers
+
+3. Git Authentication
+   - Use installation tokens for API access
+   - Generate temporary tokens for Git operations
+   - Handle token expiration gracefully
+
+4. Concurrent Operation
+   - Use separate working directories for each operation
+   - Implement resource limits for concurrent operations
+   - Consider a queue system for high-volume scenarios
