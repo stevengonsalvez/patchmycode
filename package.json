@@ -1,8 +1,8 @@
 {
-  "name": "probot-aider-bot",
+  "name": "patchmycode",
   "version": "1.0.0",
   "private": true,
-  "description": "A GitHub bot that uses Aider to automatically fix issues with specific labels",
+  "description": "A GitHub bot that automatically fixes code issues with specific labels",
   "author": "steven gonsalvez",
   "license": "ISC",
   "homepage": "https://github.com//",

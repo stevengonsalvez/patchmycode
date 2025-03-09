@@ -4,13 +4,13 @@ import * as path from 'path';
 import * as os from 'os';
 import * as process from 'process';
 
-export interface AiderResult {
+export interface PatchResult {
   success: boolean;
   changes: string[];
   message: string;
 }
 
-export interface AiderOptions {
+export interface PatchOptions {
   timeout?: number;
   openAiApiKey?: string;
   anthropicApiKey?: string;
@@ -18,12 +18,12 @@ export interface AiderOptions {
   extraArgs?: string[];
 }
 
-export class AiderClient {
+export class PatchClient {
   private workingDir: string | null = null;
-  private options: AiderOptions;
+  private options: PatchOptions;
   private isAiderInstalled: boolean = false;
 
-  constructor(options: AiderOptions = {}) {
+  constructor(options: PatchOptions = {}) {
     this.options = {
       timeout: options.timeout || 300000, // 5 minutes default
       model: options.model || 'gpt-4o',
@@ -95,7 +95,7 @@ export class AiderClient {
     issueBody: string,
     branchName: string,
     authToken?: string
-  ): Promise<AiderResult> {
+  ): Promise<PatchResult> {
     if (!this.workingDir) {
       throw new Error('Aider client not initialized. Call init() first.');
     }
@@ -118,8 +118,8 @@ export class AiderClient {
       await execa('git', ['clone', authenticatedRepoUrl, this.workingDir]);
       
       // Configure Git for commits
-      await execa('git', ['config', 'user.name', 'Aider Bot'], { cwd: this.workingDir });
-      await execa('git', ['config', 'user.email', 'aider-bot@noreply.github.com'], { cwd: this.workingDir });
+      await execa('git', ['config', 'user.name', 'patchmycode Bot'], { cwd: this.workingDir });
+      await execa('git', ['config', 'user.email', 'patchmycode-bot@noreply.github.com'], { cwd: this.workingDir });
       
       // Create a new branch
       console.log(`Creating branch: ${branchName}`);

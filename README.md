@@ -1,13 +1,13 @@
-# Probot Aider Bot
+# patchmycode
 
-> A GitHub App built with [Probot](https://github.com/probot/probot) that uses [Aider](https://aider.chat) to automatically fix issues with specific labels.
+> A GitHub App built with [Probot](https://github.com/probot/probot) that automatically fixes code issues with specific labels.
 
 ## Overview
 
-The Probot Aider Bot is a GitHub App that automates issue resolution by leveraging AI-powered code fixes. When an issue is labeled with a trigger label (e.g., `aider:fix`), the bot:
+The patchmycode bot is a GitHub App that automates issue resolution by leveraging AI-powered code fixes. When an issue is labeled with a trigger label (e.g., `fix:auto`), the bot:
 
 1. Clones the repository
-2. Uses Aider to analyze the issue description and generate a fix
+2. Uses AI to analyze the issue description and generate a fix
 3. Creates a pull request with the proposed changes
 4. Comments on the issue with a link to the PR
 
@@ -17,7 +17,7 @@ This automation helps reduce manual work for developers by providing automatic f
 
 - Node.js 18+ and npm
 - A GitHub account
-- [Aider](https://aider.chat) installed (`pip install aider-chat`)
+- [Aider](https://aider.chat) installed (`pip install aider-chat`) (used as the underlying AI code assistant)
 - Access to an OpenAI/Anthropic API key for Aider to use
 
 ## Setup
@@ -26,8 +26,8 @@ This automation helps reduce manual work for developers by providing automatic f
 
 ```sh
 # Clone the repository
-git clone https://github.com/your-username/probot-aider-bot.git
-cd probot-aider-bot
+git clone https://github.com/your-username/patchmycode.git
+cd patchmycode
 
 # Install dependencies
 npm install
@@ -66,17 +66,17 @@ See the `.env.example` file for all available configuration options. The most im
 
 - `APP_ID`: Your GitHub App ID
 - `WEBHOOK_SECRET`: Secret for webhook verification
-- `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`: Required for Aider to function
-- `AIDER_TRIGGER_LABEL`: The label that triggers Aider to fix an issue (default: `aider:fix`)
+- `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`: Required for AI code generation to function
+- `PATCH_TRIGGER_LABEL`: The label that triggers the bot to fix an issue (default: `fix:auto`)
 
 ## Usage
 
 1. Install the GitHub App on your repository
 2. Create or find an issue that can be automatically fixed
-3. Add the trigger label (default: `aider:fix`) to the issue
+3. Add the trigger label (default: `fix:auto`) to the issue
 4. The bot will:
    - Comment that it's working on the issue
-   - Use Aider to generate a fix
+   - Use AI to generate a fix
    - Create a pull request with the changes
    - Comment on the issue with the PR link
 
@@ -84,8 +84,8 @@ See the `.env.example` file for all available configuration options. The most im
 
 ### Labels
 
-- `AIDER_TRIGGER_LABEL`: Primary label that triggers Aider (default: `aider:fix`)
-- `AIDER_ADDITIONAL_TRIGGER_LABELS`: Additional labels that can also trigger Aider
+- `PATCH_TRIGGER_LABEL`: Primary label that triggers fixes (default: `fix:auto`)
+- `PATCH_ADDITIONAL_TRIGGER_LABELS`: Additional labels that can also trigger fixes
 - `AIDER_PR_LABELS`: Labels to add to created pull requests
 
 ### Comments
@@ -94,11 +94,11 @@ See the `.env.example` file for all available configuration options. The most im
 - `AIDER_SUCCESS_COMMENT`: Comment to add on successful fix
 - `AIDER_FAILURE_COMMENT`: Comment to add when fix fails
 
-### Aider
+### AI Model Configuration
 
-- `AIDER_MODEL`: LLM model to use with Aider (default: `gpt-4o`)
-- `AIDER_EXTRA_ARGS`: Additional arguments to pass to Aider
-- `AIDER_TIMEOUT`: Timeout for Aider operations in milliseconds (default: 300000)
+- `PATCH_MODEL`: LLM model to use (default: `gpt-4o`)
+- `PATCH_EXTRA_ARGS`: Additional arguments to pass to the AI engine
+- `PATCH_TIMEOUT`: Timeout for AI operations in milliseconds (default: 300000)
 
 ### Pull Requests
 
@@ -110,17 +110,17 @@ See the `.env.example` file for all available configuration options. The most im
 
 ```sh
 # 1. Build container
-docker build -t probot-aider-bot .
+docker build -t patchmycode .
 
 # 2. Start container
-docker run -e APP_ID=<app-id> -e PRIVATE_KEY=<pem-value> -e OPENAI_API_KEY=<key> probot-aider-bot
+docker run -e APP_ID=<app-id> -e PRIVATE_KEY=<pem-value> -e OPENAI_API_KEY=<key> patchmycode
 ```
 
 ## Troubleshooting
 
-### Aider Installation
+### AI Backend Installation
 
-If you encounter issues with Aider, ensure it's correctly installed:
+This application uses Aider as the AI backend. If you encounter issues, ensure it's correctly installed:
 
 ```sh
 pip install aider-chat
@@ -143,7 +143,7 @@ ANTHROPIC_API_KEY=your-key-here
 
 ### Using Claude/Anthropic Models
 
-To use Claude models with Aider, you need to:
+To use Claude models, you need to:
 
 1. Set your Anthropic API key:
    ```
