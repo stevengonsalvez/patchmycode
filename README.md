@@ -141,6 +141,27 @@ OPENAI_API_KEY=your-key-here
 ANTHROPIC_API_KEY=your-key-here
 ```
 
+### Using Claude/Anthropic Models
+
+To use Claude models with Aider, you need to:
+
+1. Set your Anthropic API key:
+   ```
+   ANTHROPIC_API_KEY=your-anthropic-key-here
+   ```
+
+2. Set the model to a Claude model:
+   ```
+   AIDER_MODEL=claude-3-7-sonnet-20250219
+   ```
+
+3. **Important**: Add the `--use-anthropic` flag to the extra arguments:
+   ```
+   AIDER_EXTRA_ARGS=--use-anthropic
+   ```
+
+All three settings are required for Claude models to work correctly. If you encounter errors about missing OpenAI API keys while using Claude, double-check that you've added the `--use-anthropic` flag to your `AIDER_EXTRA_ARGS`.
+
 ## Contributing
 
 If you have suggestions for how probot-aider-bot could be improved, or want to report a bug, open an issue! We'd love all and any contributions.

@@ -34,17 +34,27 @@ export class AiderClient {
   }
 
   /**
+   * Check if the configured model is a Claude/Anthropic model
+   */
+  private isClaudeModel(): boolean {
+    return !!this.options.model && (
+      this.options.model.toLowerCase().includes('claude') || 
+      this.options.model.toLowerCase().includes('anthropic')
+    );
+  }
+
+  /**
    * Initialize Aider client with a temporary working directory and check if Aider is installed
    */
   async init(): Promise<void> {
     // Create a temporary directory for Aider to work in
     this.workingDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aider-'));
     
-    // Check if Aider is installed
+    // Check if Aider is installed and get version
     try {
-      await execa('aider', ['--version']);
+      const { stdout } = await execa('aider', ['--version']);
       this.isAiderInstalled = true;
-      console.log('Aider is installed');
+      console.log(`Aider is installed: ${stdout.trim()}`);
     } catch (error) {
       console.log('Aider is not installed. Will attempt to install it.');
       await this.installAider();
@@ -121,10 +131,28 @@ export class AiderClient {
       
       // Build Aider command with all options
       const aiderArgs = [
-        '--yes',
-        '--no-input',
+        '--yes-always', // Use --yes-always instead of --yes and --no-input
         '--message', `Fix: ${issueTitle}`,
       ];
+      
+      // Try all possible flag variations for Claude models
+      if (this.isClaudeModel()) {
+        console.log('Using Anthropic/Claude model');
+        
+        // Check if any Claude flag is already present in extra args
+        const hasClaudeFlag = this.options.extraArgs?.some(arg => 
+          arg === '--use-anthropic' || 
+          arg === '--anthropic' ||
+          arg === '--claude'
+        );
+        
+        // Only add the flag if not already present
+        if (!hasClaudeFlag) {
+          // In newer Aider versions it might just be the model name that matters,
+          // but we'll try both methods to be safe
+          aiderArgs.push('--anthropic'); // Try this flag version
+        }
+      }
 
       // Add model if specified
       if (this.options.model) {
@@ -133,7 +161,21 @@ export class AiderClient {
       
       // Add extra arguments if specified
       if (this.options.extraArgs && this.options.extraArgs.length > 0) {
-        aiderArgs.push(...this.options.extraArgs);
+        // Filter out the --use-anthropic flag if we've already added it
+        const filteredArgs = this.isClaudeModel() 
+          ? this.options.extraArgs.filter(arg => arg !== '--use-anthropic')
+          : this.options.extraArgs;
+          
+        // Add each arg properly
+        for (const arg of filteredArgs) {
+          // Split the argument if it contains a space (e.g. "--key value")
+          if (arg.includes(' ')) {
+            const [flag, value] = arg.split(' ', 2);
+            aiderArgs.push(flag, value);
+          } else {
+            aiderArgs.push(arg);
+          }
+        }
       }
       
       // Add the issue file as the last argument
@@ -143,12 +185,41 @@ export class AiderClient {
       
       // Set environment variables for API keys if provided
       const env = { ...process.env };
-      if (this.options.openAiApiKey) {
-        env.OPENAI_API_KEY = this.options.openAiApiKey;
+      
+      // Set the appropriate API keys based on model type
+      if (this.isClaudeModel()) {
+        // For Claude models, ensure the Anthropic API key is set
+        if (this.options.anthropicApiKey) {
+          env.ANTHROPIC_API_KEY = this.options.anthropicApiKey;
+          console.log('Using Anthropic API key from options for Claude model');
+        } else if (env.ANTHROPIC_API_KEY) {
+          console.log('Using Anthropic API key from environment for Claude model');
+        } else {
+          console.log('WARNING: Using Claude model but no Anthropic API key found!');
+        }
+        
+        // For Claude models, we don't need the OpenAI API key
+        // But some versions of Aider might still check for it, so we'll set a dummy value if not present
+        if (!env.OPENAI_API_KEY) {
+          env.OPENAI_API_KEY = 'not-needed-for-claude';
+          console.log('Set dummy OpenAI API key for compatibility with Claude');
+        }
+      } else {
+        // For OpenAI models, ensure the OpenAI API key is set
+        if (this.options.openAiApiKey) {
+          env.OPENAI_API_KEY = this.options.openAiApiKey;
+          console.log('Using OpenAI API key from options');
+        } else if (env.OPENAI_API_KEY) {
+          console.log('Using OpenAI API key from environment');
+        } else {
+          console.log('WARNING: Using OpenAI model but no OpenAI API key found!');
+        }
       }
-      if (this.options.anthropicApiKey) {
-        env.ANTHROPIC_API_KEY = this.options.anthropicApiKey;
-      }
+      
+      // Log API key presence for debugging (don't log the actual keys!)
+      console.log('Environment variables set:');
+      console.log('- OPENAI_API_KEY:', env.OPENAI_API_KEY ? 'Set' : 'Not set');
+      console.log('- ANTHROPIC_API_KEY:', env.ANTHROPIC_API_KEY ? 'Set' : 'Not set');
       
       // Run Aider with the issue file
       const { stdout, stderr } = await execa('aider', aiderArgs, {
@@ -207,16 +278,39 @@ export class AiderClient {
       
       // Try to get additional information from the error
       let errorMessage = error instanceof Error ? error.message : String(error);
+      const fullError = errorMessage; // Keep the full error for logging
+      
+      // Log the full error for debugging
+      console.error('Full Aider error:', fullError);
       
       // Check for specific error types
-      if (errorMessage.includes('OPENAI_API_KEY')) {
-        errorMessage = 'OpenAI API key is missing or invalid. Please set the OPENAI_API_KEY environment variable.';
-      } else if (errorMessage.includes('ANTHROPIC_API_KEY')) {
+      if (errorMessage.includes('OPENAI_API_KEY') || errorMessage.includes('openai.error.AuthenticationError')) {
+        if (this.isClaudeModel()) {
+          errorMessage = 'API key error with Claude model. Trying these fixes:\n' +
+            '1. Set both ANTHROPIC_API_KEY and a dummy OPENAI_API_KEY\n' +
+            '2. Try different Claude flags: --anthropic, --claude, or --use-anthropic\n' +
+            '3. Update to the latest version of Aider: pip install -U aider-chat';
+        } else {
+          errorMessage = 'OpenAI API key is missing or invalid. Please set the OPENAI_API_KEY environment variable.';
+        }
+      } else if (errorMessage.includes('ANTHROPIC_API_KEY') || 
+                 errorMessage.includes('anthropic.AuthenticationError') ||
+                 errorMessage.includes('anthropic.api_key')) {
         errorMessage = 'Anthropic API key is missing or invalid. Please set the ANTHROPIC_API_KEY environment variable.';
       } else if (errorMessage.includes('ENOENT') && errorMessage.includes('aider')) {
         errorMessage = 'Aider executable not found. Please install Aider with: pip install aider-chat';
       } else if (errorMessage.includes('ETIMEDOUT') || errorMessage.includes('timeout')) {
         errorMessage = `Aider operation timed out after ${this.options.timeout ? this.options.timeout / 1000 : 300} seconds`;
+      } else if (errorMessage.includes('unrecognized arguments')) {
+        errorMessage = `Aider command line error: ${errorMessage}\n\nThis may be due to version differences. Try updating Aider: pip install -U aider-chat`;
+      }
+      
+      // If using Claude model, add specific advice
+      if (this.isClaudeModel()) {
+        errorMessage += '\n\nAdditional Claude troubleshooting:\n' +
+          '• Make sure ANTHROPIC_API_KEY is set and valid\n' +
+          '• Try different flags for Claude in AIDER_EXTRA_ARGS (--anthropic or --claude)\n' +
+          '• Check Aider version compatibility with Claude models';
       }
       
       return {
