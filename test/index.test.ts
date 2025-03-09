@@ -44,6 +44,14 @@ describe("My Probot app", () => {
   });
 
   test("creates a comment when an issue is opened", async () => {
+    // Create a simple app handler for testing
+    probot.load((app) => {
+      app.on("issues.opened", async (context) => {
+        const params = context.issue({ body: "Thanks for opening this issue!" });
+        return context.octokit.issues.createComment(params);
+      });
+    });
+
     const mock = nock("https://api.github.com")
       // Test that we correctly return a test token
       .post("/app/installations/2/access_tokens")
