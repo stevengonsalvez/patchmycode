@@ -1,10 +1,10 @@
-# Product Context: Probot Aider Bot
+# Product Context: patchmycode
 
 ## Why This Project Exists
 
-Modern software development teams face consistent challenges in managing and resolving issues reported in their repositories. Many simple or routine issues remain unaddressed for extended periods, creating backlogs and slowing development progress. The Probot Aider Bot addresses this challenge by automating the resolution of appropriate issues using AI assistance.
+Modern software development teams face consistent challenges in managing and resolving issues reported in their repositories. Many simple or routine issues remain unaddressed for extended periods, creating backlogs and slowing development progress. The patchmycode bot addresses this challenge by automating the resolution of appropriate issues using AI assistance.
 
-By leveraging Aider, a conversational coding assistant built on large language models, this bot can understand issue descriptions, analyze codebases, and generate fixes automatically. This automation reduces manual work for developers, speeds up issue resolution, and helps maintain project momentum.
+By leveraging AI-powered code generation, this bot can understand issue descriptions, analyze codebases, and generate fixes automatically. This automation reduces manual work for developers, speeds up issue resolution, and helps maintain project momentum.
 
 ## Problems It Solves
 
@@ -27,7 +27,7 @@ By leveraging Aider, a conversational coding assistant built on large language m
 ## How It Should Work
 
 1. **Triggering the Bot**
-   - Users label an issue with a specific trigger (e.g., `aider:fix`)
+   - Users label an issue with a specific trigger (e.g., `fix:auto`)
    - The bot detects the label and begins processing
 
 2. **Analysis Phase**
@@ -36,8 +36,8 @@ By leveraging Aider, a conversational coding assistant built on large language m
    - It determines if the issue can be fixed automatically
 
 3. **Fix Generation**
-   - Aider is invoked with the issue context
-   - The bot captures Aider's suggested changes
+   - The AI engine is invoked with the issue context
+   - The bot captures the AI-suggested changes
 
 4. **Pull Request Creation**
    - Changes are committed to a new branch

@@ -1,4 +1,4 @@
-# Progress: Probot Aider Bot
+# Progress: patchmycode
 
 ## What Works
 
@@ -93,9 +93,32 @@ The application can now:
 3. Add support for more advanced Aider scenarios
 4. Enhance error recovery mechanisms
 
+## Recent Updates
+
+### Project Renaming (March 2025)
+- ✅ Renamed the project from "Probot Aider Bot" to "patchmycode"
+- ✅ Updated all code references throughout the codebase
+- ✅ Refactored configuration variables from `AIDER_*` to `PATCH_*` format
+- ✅ Renamed source files (aider.ts → patch.ts)
+- ✅ Updated class and interface names to reflect the new branding
+- ✅ Changed default trigger label from `aider:fix` to `fix:auto`
+- ✅ Updated Git commit author from "Aider Bot" to "patchmycode"
+- ✅ Updated all PR templates and issue comments to reference "patchmycode"
+- ✅ Updated documentation in README.md to reflect new name and terminology
+- ✅ Updated Docker image references
+
+### Brand Consistency
+- ✅ Made Aider the "behind-the-scenes" implementation detail
+- ✅ Ensured "patchmycode" is the consistent brand users see in:
+  - GitHub commit messages
+  - Issue comments
+  - Pull request templates
+  - Configuration variables
+  - Documentation
+
 ## Known Issues
 
-1. **Aider Integration**
+1. **AI Integration**
    - Currently lacks support for repository-specific context (beyond what's in the issue)
    - No interactive mode support for complex issues
 

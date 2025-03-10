@@ -118,7 +118,7 @@ export class PatchClient {
       await execa('git', ['clone', authenticatedRepoUrl, this.workingDir]);
       
       // Configure Git for commits
-      await execa('git', ['config', 'user.name', 'patchmycode Bot'], { cwd: this.workingDir });
+      await execa('git', ['config', 'user.name', 'patchmycode'], { cwd: this.workingDir });
       await execa('git', ['config', 'user.email', 'patchmycode-bot@noreply.github.com'], { cwd: this.workingDir });
       
       // Create a new branch

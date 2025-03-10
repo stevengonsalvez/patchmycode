@@ -1,18 +1,18 @@
-# System Patterns: Probot Aider Bot
+# System Patterns: patchmycode
 
 ## System Architecture
 
-The Probot Aider Bot is built using a modular architecture with clear separation of concerns:
+patchmycode is built using a modular architecture with clear separation of concerns:
 
 ```mermaid
 flowchart TD
     Webhook[GitHub Webhook] --> Probot[Probot Framework]
     Probot --> EventHandlers[Event Handlers]
     EventHandlers --> GitHubClient[GitHub Client]
-    EventHandlers --> AiderClient[Aider Client]
+    EventHandlers --> PatchClient[Patch Client]
     GitHubClient --> GitHubAPI[GitHub API]
-    AiderClient --> AiderCLI[Aider CLI]
-    AiderCLI --> LocalGit[Local Git Operations]
+    PatchClient --> AIEngine[AI Code Assistant]
+    AIEngine --> LocalGit[Local Git Operations]
     LocalGit --> GitHubAPI
 ```
 
@@ -25,7 +25,7 @@ flowchart TD
 
 2. **Event Handlers**
    - Process GitHub events (issues, labels)
-   - Orchestrate the workflow between GitHub and Aider
+   - Orchestrate the workflow between GitHub and AI
    - Maintain state during the fix process
 
 3. **GitHub Client**
@@ -33,10 +33,10 @@ flowchart TD
    - Handles repository operations (clone, branch, PR)
    - Manages issue comments and labels
 
-4. **Aider Client**
-   - Integrates with the Aider CLI tool
+4. **Patch Client**
+   - Integrates with the AI code assistant
    - Manages temporary working directories
-   - Captures and processes Aider output
+   - Captures and processes AI-generated output
 
 ## Key Technical Decisions
 
@@ -89,15 +89,15 @@ flowchart TD
    - GitHub client provides repository information to event handlers
    - Event handlers process GitHub client results
 
-2. **Event Handler → Aider Client**
-   - Event handlers pass issue information to Aider client
-   - Aider client returns fix results to event handlers
-   - Event handlers use Aider client for temporary directory management
+2. **Event Handler → Patch Client**
+   - Event handlers pass issue information to Patch client
+   - Patch client returns fix results to event handlers
+   - Event handlers use Patch client for temporary directory management
 
-3. **Aider Client → Local Git**
-   - Aider client uses local Git operations
-   - Git operations are encapsulated within Aider client
-   - Results of Git operations inform Aider client responses
+3. **Patch Client → Local Git**
+   - Patch client uses local Git operations
+   - Git operations are encapsulated within Patch client
+   - Results of Git operations inform Patch client responses
 
 4. **GitHub Client → GitHub API**
    - GitHub client translates app operations to API calls

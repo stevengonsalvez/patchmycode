@@ -1,8 +1,8 @@
-# Active Context: Probot Aider Bot
+# Active Context: patchmycode
 
 ## Current Work Focus
 
-We have implemented a Probot GitHub app that wraps the Aider.chat tool to automatically fix GitHub issues based on labels. The app has been significantly enhanced from its initial bootstrapped state and now includes robust integrations with both GitHub and Aider.
+We have implemented a Probot GitHub app named "patchmycode" that uses AI to automatically fix GitHub issues based on labels. The app has been significantly enhanced from its initial bootstrapped state and now includes robust integrations with both GitHub and AI-powered code generation (using Aider.chat as the underlying mechanism).
 
 ### Primary Goals
 
@@ -29,8 +29,11 @@ We have implemented a Probot GitHub app that wraps the Aider.chat tool to automa
 ## Recent Changes
 
 The project has been substantially enhanced with:
+- Complete rebranding from "Probot Aider Bot" to "patchmycode"
+- Refactored codebase for consistent naming and branding
+- Updated documentation to reflect the new project identity
 - Memory bank structure for documentation
-- Enhanced Aider client with installation management
+- Enhanced AI client with installation management
 - Improved GitHub client with rate limiting and authentication
 - Expanded configuration options via environment variables
 - Detailed error handling and reporting
@@ -47,7 +50,7 @@ The project has been substantially enhanced with:
    - Set up CI/CD for automated testing
 
 2. **Repository-Level Configuration**
-   - Implement reading configuration from repository files (.github/aider-bot.yml)
+   - Implement reading configuration from repository files (.github/patchmycode.yml)
    - Support merging repository config with global config
    - Add validation for configuration values
    - Document repository configuration options
@@ -88,7 +91,7 @@ The project has been substantially enhanced with:
 ### Current Considerations
 
 1. **Repository Configuration**
-   - Where to store repository-specific configuration? (.github/aider-bot.yml is the leading option)
+   - Where to store repository-specific configuration? (.github/patchmycode.yml is the leading option)
    - How to merge repository configuration with global configuration
    - What overrides should be allowed at the repository level
 

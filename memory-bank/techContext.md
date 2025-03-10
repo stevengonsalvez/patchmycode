@@ -1,4 +1,4 @@
-# Technical Context: Probot Aider Bot
+# Technical Context: patchmycode
 
 ## Technologies Used
 
@@ -13,7 +13,7 @@
 - **Probot Context**: Contextual information for GitHub events
 
 ### External Tools
-- **Aider**: AI-powered coding assistant (https://aider.chat)
+- **Aider**: AI-powered coding assistant used as the backend (https://aider.chat)
 - **Git**: Distributed version control system for code repository operations
 
 ### Process Management
@@ -61,8 +61,8 @@
 - Webhook payload size limits may affect very large issues
 - API response times may affect long-running operations
 
-### Aider Limitations
-- Requires proper installation and configuration
+### AI Limitations
+- Requires proper installation and configuration of underlying tools
 - May have version dependencies
 - Processing time varies based on issue complexity
 - Dependent on LLM API availability and reliability

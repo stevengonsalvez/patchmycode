@@ -1,7 +1,7 @@
-# Project Brief: Probot Aider Bot
+# Project Brief: patchmycode
 
 ## Project Overview
-Probot Aider Bot is a GitHub App built with Probot that integrates with Aider (https://aider.chat) to automatically fix issues in GitHub repositories based on issue labels. When an issue is labeled with a specific trigger label, the bot analyzes the issue, uses Aider to generate a fix, and creates a pull request with the proposed solution.
+patchmycode is a GitHub App built with Probot that uses AI to automatically fix issues in GitHub repositories based on issue labels. When an issue is labeled with a specific trigger label, the bot analyzes the issue, generates a fix using AI assistance, and creates a pull request with the proposed solution.
 
 ## Core Requirements
 
@@ -12,11 +12,11 @@ Probot Aider Bot is a GitHub App built with Probot that integrates with Aider (h
    - Submit pull requests with changes
    - Comment on issues with results
 
-2. **Aider Integration**
-   - Execute Aider CLI to analyze and fix issues
-   - Pass issue title and description to Aider
-   - Capture Aider's output and changes
-   - Support Aider's configuration options
+2. **AI Integration**
+   - Execute AI code assistant to analyze and fix issues
+   - Pass issue title and description to the AI engine
+   - Capture AI-generated output and changes
+   - Support configurable AI options
 
 3. **Error Handling**
    - Handle cases where Aider can't fix an issue
