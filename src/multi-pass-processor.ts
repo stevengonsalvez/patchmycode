@@ -122,7 +122,9 @@ export class MultiPassProcessor {
         issueTitle,
         issueBody,
         branchName,
-        authToken
+        authToken,
+        undefined, // baseBranch
+        this.createProgressCallbackHandler(mode) // Add progress callback
       );
       
       return {
@@ -183,7 +185,9 @@ export class MultiPassProcessor {
         issueTitle,
         issueBody,
         primaryBranchName,
-        authToken
+        authToken,
+        undefined, // baseBranch
+        this.createProgressCallbackHandler(primaryMode) // Add progress callback
       );
       
       if (!primaryResult.success) {
@@ -232,7 +236,8 @@ export class MultiPassProcessor {
         `${issueBody}\n\n---\n\n${contextMessage}`,
         finalBranchName,
         authToken,
-        primaryBranchName
+        primaryBranchName,
+        this.createProgressCallbackHandler(secondaryMode) // Add progress callback
       );
       
       // Combine the changes from both passes
@@ -264,5 +269,128 @@ export class MultiPassProcessor {
         modesUsed: modes
       };
     }
+  }
+
+  /**
+   * Creates a progress callback handler function for streaming Aider output to console
+   */
+  private createProgressCallbackHandler(mode: string): (status: string, data?: any) => void {
+    let lastActivityTimestamp = Date.now();
+    let stuckWarningIssued = false;
+    
+    return (status: string, data?: any) => {
+      switch (status) {
+        case 'starting':
+          console.log(`🚀 [${mode}] Starting Aider process: ${data?.title || ''}`);
+          break;
+          
+        case 'cloning':
+          console.log(`📥 [${mode}] Cloning repository: ${data?.repo || ''}`);
+          break;
+          
+        case 'checkout':
+          console.log(`🔀 [${mode}] Checking out branch: ${data?.branch || ''}`);
+          break;
+          
+        case 'branch':
+          console.log(`🌿 [${mode}] Creating branch: ${data?.name || ''}`);
+          break;
+          
+        case 'aider_start':
+          console.log(`⚙️ [${mode}] Starting Aider with model: ${data?.model || ''}`);
+          console.log(`   Mode: ${data?.mode || 'unknown'}`);
+          lastActivityTimestamp = Date.now();
+          break;
+          
+        case 'output':
+          // Only log non-empty output that's not too long for readability
+          if (data?.text && data.text.trim() && data.text.length < 500) {
+            // Remove redundant newlines for cleaner logs
+            const cleanedText = data.text.replace(/\n{3,}/g, '\n\n').trim();
+            console.log(`🔄 [${mode}] ${cleanedText}`);
+          }
+          lastActivityTimestamp = Date.now();
+          stuckWarningIssued = false;
+          break;
+          
+        case 'url_detected':
+          console.log(`🔗 [${mode}] URLs detected in Aider output:`);
+          if (data?.urls && Array.isArray(data.urls)) {
+            data.urls.forEach((url: string) => console.log(`   ${url}`));
+          }
+          lastActivityTimestamp = Date.now();
+          break;
+          
+        case 'auto_response':
+          console.log(`🤖 [${mode}] Auto-responded "${data?.response}" to Aider's "${data?.prompt}" prompt`);
+          lastActivityTimestamp = Date.now();
+          break;
+
+        case 'health_check':
+          console.log(`💓 [${mode}] Health check sent to Aider (inactive for ${data?.inactive_seconds || 0}s, check #${data?.consecutive_checks || 1})`);
+          break;
+          
+        case 'forced_termination':
+          console.error(`⚠️ [${mode}] Forcefully terminating Aider process: ${data?.reason || 'unknown reason'}`);
+          console.error(`   Inactive for ${data?.inactive_seconds || 0} seconds`);
+          break;
+          
+        case 'max_time_reached':
+          console.error(`⏰ [${mode}] Maximum time limit of ${data?.minutes || 30} minutes reached. Force terminating Aider.`);
+          break;
+          
+        case 'error':
+          console.error(`❌ [${mode}] Error: ${data?.text || data?.message || 'Unknown error'}`);
+          lastActivityTimestamp = Date.now();
+          break;
+          
+        case 'status':
+          if (data?.status === 'working') {
+            const inactiveSeconds = data?.inactive_seconds || 0;
+            // Check if Aider might be stuck
+            if (inactiveSeconds > 120 && !stuckWarningIssued) { // 2 minutes of inactivity
+              console.warn(`⚠️ [${mode}] Warning: Aider has been inactive for ${inactiveSeconds} seconds, it may be stuck`);
+              console.warn(`   Last output: ${data?.last_output || 'none'}`);
+              stuckWarningIssued = true;
+            }
+          } else {
+            console.log(`ℹ️ [${mode}] Status: ${data?.status || 'unknown'}`);
+            lastActivityTimestamp = Date.now();
+            stuckWarningIssued = false;
+          }
+          break;
+          
+        case 'timeout':
+          console.warn(`⏰ [${mode}] Timeout reached after ${data?.seconds || 'unknown'} seconds`);
+          break;
+          
+        case 'aider_complete':
+          console.log(`✅ [${mode}] Aider completed with exit code: ${data?.exitCode}`);
+          break;
+          
+        case 'no_changes':
+          console.log(`ℹ️ [${mode}] No changes were made by Aider`);
+          break;
+          
+        case 'committing':
+          console.log(`📝 [${mode}] Committing changes`);
+          break;
+          
+        case 'pushing':
+          console.log(`📤 [${mode}] Pushing changes to remote`);
+          break;
+          
+        case 'complete':
+          console.log(`🎉 [${mode}] Processing complete with ${data?.files?.length || 0} changed files`);
+          if (data?.files?.length > 0) {
+            console.log(`   Changed files: ${data.files.join(', ')}`);
+          }
+          break;
+          
+        default:
+          // For any other events, just log them with data
+          console.log(`[${mode}] ${status}: ${JSON.stringify(data || {})}`);
+      }
+    };
   }
 } 
