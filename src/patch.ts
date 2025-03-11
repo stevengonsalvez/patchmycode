@@ -14,6 +14,10 @@ export interface PatchOptions {
   timeout?: number;
   openAiApiKey?: string;
   anthropicApiKey?: string;
+  googleApiKey?: string;
+  qwenApiKey?: string;
+  deepseekApiKey?: string;
+  codestralApiKey?: string;
   model?: string;
   extraArgs?: string[];
 }
@@ -29,7 +33,11 @@ export class PatchClient {
       model: options.model || 'gpt-4o',
       extraArgs: options.extraArgs || [],
       openAiApiKey: options.openAiApiKey || process.env.OPENAI_API_KEY,
-      anthropicApiKey: options.anthropicApiKey || process.env.ANTHROPIC_API_KEY
+      anthropicApiKey: options.anthropicApiKey || process.env.ANTHROPIC_API_KEY,
+      googleApiKey: options.googleApiKey || process.env.GOOGLE_API_KEY,
+      qwenApiKey: options.qwenApiKey || process.env.QWEN_API_KEY,
+      deepseekApiKey: options.deepseekApiKey || process.env.DEEPSEEK_API_KEY,
+      codestralApiKey: options.codestralApiKey || process.env.CODESTRAL_API_KEY
     };
   }
 
@@ -40,6 +48,43 @@ export class PatchClient {
     return !!this.options.model && (
       this.options.model.toLowerCase().includes('claude') || 
       this.options.model.toLowerCase().includes('anthropic')
+    );
+  }
+
+  /**
+   * Check if the configured model is a Google Gemini model
+   */
+  private isGeminiModel(): boolean {
+    return !!this.options.model && (
+      this.options.model.toLowerCase().includes('gemini') ||
+      this.options.model.toLowerCase().includes('google')
+    );
+  }
+
+  /**
+   * Check if the configured model is a Qwen model
+   */
+  private isQwenModel(): boolean {
+    return !!this.options.model && (
+      this.options.model.toLowerCase().includes('qwen')
+    );
+  }
+
+  /**
+   * Check if the configured model is a Deepseek model
+   */
+  private isDeepseekModel(): boolean {
+    return !!this.options.model && (
+      this.options.model.toLowerCase().includes('deepseek')
+    );
+  }
+
+  /**
+   * Check if the configured model is a Codestral model
+   */
+  private isCodestralModel(): boolean {
+    return !!this.options.model && (
+      this.options.model.toLowerCase().includes('codestral')
     );
   }
 
@@ -135,7 +180,7 @@ export class PatchClient {
         '--message', `Fix: ${issueTitle}`,
       ];
       
-      // Try all possible flag variations for Claude models
+      // Add model-specific flags
       if (this.isClaudeModel()) {
         console.log('Using Anthropic/Claude model');
         
@@ -151,6 +196,58 @@ export class PatchClient {
           // In newer Aider versions it might just be the model name that matters,
           // but we'll try both methods to be safe
           aiderArgs.push('--anthropic'); // Try this flag version
+        }
+      } else if (this.isGeminiModel()) {
+        console.log('Using Google Gemini model');
+        
+        // Check if Gemini flag is already present in extra args
+        const hasGeminiFlag = this.options.extraArgs?.some(arg => 
+          arg === '--use-gemini' || 
+          arg === '--gemini'
+        );
+        
+        // Only add the flag if not already present
+        if (!hasGeminiFlag) {
+          aiderArgs.push('--gemini');
+        }
+      } else if (this.isQwenModel()) {
+        console.log('Using Qwen model');
+        
+        // Check if Qwen flag is already present in extra args
+        const hasQwenFlag = this.options.extraArgs?.some(arg => 
+          arg === '--use-qwen' || 
+          arg === '--qwen'
+        );
+        
+        // Only add the flag if not already present
+        if (!hasQwenFlag) {
+          aiderArgs.push('--qwen');
+        }
+      } else if (this.isDeepseekModel()) {
+        console.log('Using Deepseek model');
+        
+        // Check if Deepseek flag is already present in extra args
+        const hasDeepseekFlag = this.options.extraArgs?.some(arg => 
+          arg === '--use-deepseek' || 
+          arg === '--deepseek'
+        );
+        
+        // Only add the flag if not already present
+        if (!hasDeepseekFlag) {
+          aiderArgs.push('--deepseek');
+        }
+      } else if (this.isCodestralModel()) {
+        console.log('Using Codestral model');
+        
+        // Check if Codestral flag is already present in extra args
+        const hasCodestralFlag = this.options.extraArgs?.some(arg => 
+          arg === '--use-codestral' || 
+          arg === '--codestral'
+        );
+        
+        // Only add the flag if not already present
+        if (!hasCodestralFlag) {
+          aiderArgs.push('--codestral');
         }
       }
 
@@ -204,6 +301,70 @@ export class PatchClient {
           env.OPENAI_API_KEY = 'not-needed-for-claude';
           console.log('Set dummy OpenAI API key for compatibility with Claude');
         }
+      } else if (this.isGeminiModel()) {
+        // For Gemini models, ensure the Google API key is set
+        if (this.options.googleApiKey) {
+          env.GOOGLE_API_KEY = this.options.googleApiKey;
+          console.log('Using Google API key from options for Gemini model');
+        } else if (env.GOOGLE_API_KEY) {
+          console.log('Using Google API key from environment for Gemini model');
+        } else {
+          console.log('WARNING: Using Gemini model but no Google API key found!');
+        }
+        
+        // Some Aider versions might still check for OpenAI API key
+        if (!env.OPENAI_API_KEY) {
+          env.OPENAI_API_KEY = 'not-needed-for-gemini';
+          console.log('Set dummy OpenAI API key for compatibility with Gemini');
+        }
+      } else if (this.isQwenModel()) {
+        // For Qwen models, ensure the Qwen API key is set
+        if (this.options.qwenApiKey) {
+          env.QWEN_API_KEY = this.options.qwenApiKey;
+          console.log('Using Qwen API key from options');
+        } else if (env.QWEN_API_KEY) {
+          console.log('Using Qwen API key from environment');
+        } else {
+          console.log('WARNING: Using Qwen model but no Qwen API key found!');
+        }
+        
+        // Some Aider versions might still check for OpenAI API key
+        if (!env.OPENAI_API_KEY) {
+          env.OPENAI_API_KEY = 'not-needed-for-qwen';
+          console.log('Set dummy OpenAI API key for compatibility with Qwen');
+        }
+      } else if (this.isDeepseekModel()) {
+        // For Deepseek models, ensure the Deepseek API key is set
+        if (this.options.deepseekApiKey) {
+          env.DEEPSEEK_API_KEY = this.options.deepseekApiKey;
+          console.log('Using Deepseek API key from options');
+        } else if (env.DEEPSEEK_API_KEY) {
+          console.log('Using Deepseek API key from environment');
+        } else {
+          console.log('WARNING: Using Deepseek model but no Deepseek API key found!');
+        }
+        
+        // Some Aider versions might still check for OpenAI API key
+        if (!env.OPENAI_API_KEY) {
+          env.OPENAI_API_KEY = 'not-needed-for-deepseek';
+          console.log('Set dummy OpenAI API key for compatibility with Deepseek');
+        }
+      } else if (this.isCodestralModel()) {
+        // For Codestral models, ensure the Codestral API key is set
+        if (this.options.codestralApiKey) {
+          env.CODESTRAL_API_KEY = this.options.codestralApiKey;
+          console.log('Using Codestral API key from options');
+        } else if (env.CODESTRAL_API_KEY) {
+          console.log('Using Codestral API key from environment');
+        } else {
+          console.log('WARNING: Using Codestral model but no Codestral API key found!');
+        }
+        
+        // Some Aider versions might still check for OpenAI API key
+        if (!env.OPENAI_API_KEY) {
+          env.OPENAI_API_KEY = 'not-needed-for-codestral';
+          console.log('Set dummy OpenAI API key for compatibility with Codestral');
+        }
       } else {
         // For OpenAI models, ensure the OpenAI API key is set
         if (this.options.openAiApiKey) {
@@ -220,6 +381,10 @@ export class PatchClient {
       console.log('Environment variables set:');
       console.log('- OPENAI_API_KEY:', env.OPENAI_API_KEY ? 'Set' : 'Not set');
       console.log('- ANTHROPIC_API_KEY:', env.ANTHROPIC_API_KEY ? 'Set' : 'Not set');
+      console.log('- GOOGLE_API_KEY:', env.GOOGLE_API_KEY ? 'Set' : 'Not set');
+      console.log('- QWEN_API_KEY:', env.QWEN_API_KEY ? 'Set' : 'Not set');
+      console.log('- DEEPSEEK_API_KEY:', env.DEEPSEEK_API_KEY ? 'Set' : 'Not set');
+      console.log('- CODESTRAL_API_KEY:', env.CODESTRAL_API_KEY ? 'Set' : 'Not set');
       
       // Run Aider with the issue file
       const { stdout, stderr } = await execa('aider', aiderArgs, {
@@ -297,6 +462,22 @@ export class PatchClient {
                  errorMessage.includes('anthropic.AuthenticationError') ||
                  errorMessage.includes('anthropic.api_key')) {
         errorMessage = 'Anthropic API key is missing or invalid. Please set the ANTHROPIC_API_KEY environment variable.';
+      } else if (errorMessage.includes('GOOGLE_API_KEY') ||
+                 errorMessage.includes('google.auth') ||
+                 errorMessage.includes('gemini')) {
+        errorMessage = 'Google API key is missing or invalid. Please set the GOOGLE_API_KEY environment variable.';
+      } else if (errorMessage.includes('QWEN_API_KEY') ||
+                 errorMessage.includes('qwen.auth') ||
+                 errorMessage.includes('qwen.api_key')) {
+        errorMessage = 'Qwen API key is missing or invalid. Please set the QWEN_API_KEY environment variable.';
+      } else if (errorMessage.includes('DEEPSEEK_API_KEY') ||
+                 errorMessage.includes('deepseek.auth') ||
+                 errorMessage.includes('deepseek.api_key')) {
+        errorMessage = 'Deepseek API key is missing or invalid. Please set the DEEPSEEK_API_KEY environment variable.';
+      } else if (errorMessage.includes('CODESTRAL_API_KEY') ||
+                 errorMessage.includes('codestral.auth') ||
+                 errorMessage.includes('codestral.api_key')) {
+        errorMessage = 'Codestral API key is missing or invalid. Please set the CODESTRAL_API_KEY environment variable.';
       } else if (errorMessage.includes('ENOENT') && errorMessage.includes('aider')) {
         errorMessage = 'Aider executable not found. Please install Aider with: pip install aider-chat';
       } else if (errorMessage.includes('ETIMEDOUT') || errorMessage.includes('timeout')) {
@@ -305,12 +486,36 @@ export class PatchClient {
         errorMessage = `Aider command line error: ${errorMessage}\n\nThis may be due to version differences. Try updating Aider: pip install -U aider-chat`;
       }
       
-      // If using Claude model, add specific advice
+      // Add model-specific troubleshooting advice
       if (this.isClaudeModel()) {
         errorMessage += '\n\nAdditional Claude troubleshooting:\n' +
           '• Make sure ANTHROPIC_API_KEY is set and valid\n' +
           '• Try different flags for Claude in AIDER_EXTRA_ARGS (--anthropic or --claude)\n' +
           '• Check Aider version compatibility with Claude models';
+      } else if (this.isGeminiModel()) {
+        errorMessage += '\n\nAdditional Gemini troubleshooting:\n' +
+          '• Make sure GOOGLE_API_KEY is set and valid\n' +
+          '• Try different flags for Gemini in AIDER_EXTRA_ARGS (--gemini)\n' +
+          '• Check Aider version compatibility with Gemini models\n' +
+          '• Ensure you have the latest version of Aider: pip install -U aider-chat';
+      } else if (this.isQwenModel()) {
+        errorMessage += '\n\nAdditional Qwen troubleshooting:\n' +
+          '• Make sure QWEN_API_KEY is set and valid\n' +
+          '• Try different flags for Qwen in AIDER_EXTRA_ARGS (--qwen)\n' +
+          '• Check Aider version compatibility with Qwen models\n' +
+          '• Ensure you have the latest version of Aider: pip install -U aider-chat';
+      } else if (this.isDeepseekModel()) {
+        errorMessage += '\n\nAdditional Deepseek troubleshooting:\n' +
+          '• Make sure DEEPSEEK_API_KEY is set and valid\n' +
+          '• Try different flags for Deepseek in AIDER_EXTRA_ARGS (--deepseek)\n' +
+          '• Check Aider version compatibility with Deepseek models\n' +
+          '• Ensure you have the latest version of Aider: pip install -U aider-chat';
+      } else if (this.isCodestralModel()) {
+        errorMessage += '\n\nAdditional Codestral troubleshooting:\n' +
+          '• Make sure CODESTRAL_API_KEY is set and valid\n' +
+          '• Try different flags for Codestral in AIDER_EXTRA_ARGS (--codestral)\n' +
+          '• Check Aider version compatibility with Codestral models\n' +
+          '• Ensure you have the latest version of Aider: pip install -U aider-chat';
       }
       
       return {
