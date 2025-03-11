@@ -795,6 +795,13 @@ export class PatchClient {
         };
       }
       
+      // Stage all changes before committing
+      console.log('Staging changes...');
+      if (progressCallback) {
+        progressCallback('staging', {});
+      }
+      await this.executeCommand('git', ['add', '.']);
+      
       // Commit changes
       console.log('Committing changes...');
       if (progressCallback) {
