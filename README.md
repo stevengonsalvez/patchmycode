@@ -150,7 +150,8 @@ npm start
 
 #### Core Configuration
 - `APP_ID`: Your GitHub App ID
-- `PRIVATE_KEY`: Your GitHub App's private key
+- `PRIVATE_KEY`: Your GitHub App's private key (contents of the .pem file)
+- `PRIVATE_KEY_PATH`: Alternative to PRIVATE_KEY, specify path to the .pem file (recommended for security)
 - `WEBHOOK_SECRET`: Your GitHub App's webhook secret
 - `WEBHOOK_PROXY_URL`: URL for webhook proxying (for local development with smee.io)
 - `LOG_LEVEL`: Logging level (`debug`, `info`, `warn`, or `error`)

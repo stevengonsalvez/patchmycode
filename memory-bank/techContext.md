@@ -41,7 +41,8 @@
 
 ### Environment Variables
 - `APP_ID`: GitHub App ID from GitHub App registration
-- `PRIVATE_KEY`: Private key from GitHub App registration
+- `PRIVATE_KEY`: Private key from GitHub App registration (contents of the .pem file)
+- `PRIVATE_KEY_PATH`: Alternative to PRIVATE_KEY, path to the .pem file (recommended)
 - `WEBHOOK_SECRET`: Secret for webhook verification
 - `WEBHOOK_PROXY_URL`: URL for local development webhook forwarding
 - `LOG_LEVEL`: Logging level (debug, info, warn, error)
