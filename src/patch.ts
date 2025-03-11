@@ -105,17 +105,85 @@ export class PatchClient {
     }
 
     try {
+      // Diagnostic logging for tokens (without exposing the token)
+      if (authToken) {
+        console.log(`Auth token provided: ${authToken.substring(0, 4)}...${authToken.substring(authToken.length - 4)} (${authToken.length} chars)`);
+        console.log(`Token type: ${this.identifyTokenType(authToken)}`);
+      } else {
+        console.log('No auth token provided for repository access');
+      }
+
       // Prepare auth for private repositories if token is provided
       let authenticatedRepoUrl = repoUrl;
       if (authToken) {
-        // Insert auth token into the URL
+        // Validate token format
+        if (!this.isValidGitHubToken(authToken)) {
+          console.warn('Warning: Token format does not match standard GitHub token patterns');
+        }
+        
+        // Use token for authentication but handle differently based on URL format
         const url = new URL(repoUrl);
-        authenticatedRepoUrl = repoUrl.replace(`${url.protocol}//`, `${url.protocol}//${authToken}@`);
+        
+        // GitHub-specific handling with multiple auth methods
+        if (url.hostname === 'github.com') {
+          // Determine the correct authentication format based on token type
+          const tokenType = this.identifyTokenType(authToken);
+          
+          // Create authentication URLs in order of preference
+          const authUrls: string[] = [];
+          
+          if (tokenType === 'GitHub App Installation Token') {
+            // For GitHub App installation tokens (ghs_*), x-access-token is preferred
+            authUrls.push(`https://x-access-token:${authToken}@github.com${url.pathname}`);
+            authUrls.push(`https://${authToken}@github.com${url.pathname}`);
+          } else if (tokenType === 'OAuth App Token') {
+            // For OAuth tokens, oauth2: prefix is preferred
+            authUrls.push(`https://oauth2:${authToken}@github.com${url.pathname}`);
+            authUrls.push(`https://${authToken}@github.com${url.pathname}`);
+          } else {
+            // For PATs and unknown tokens, try multiple formats
+            authUrls.push(`https://${authToken}@github.com${url.pathname}`);
+            authUrls.push(`https://x-access-token:${authToken}@github.com${url.pathname}`);
+            authUrls.push(`https://oauth2:${authToken}@github.com${url.pathname}`);
+          }
+          
+          console.log('Prepared multiple authentication methods for GitHub');
+          
+          // Try multiple authentication methods in sequence
+          let cloned = false;
+          let lastError: Error | null = null;
+          
+          for (const authUrl of authUrls) {
+            try {
+              console.log('Attempting GitHub repository clone...');
+              await this.attemptRepositoryClone(authUrl, this.workingDir);
+              cloned = true;
+              console.log('Authentication method succeeded');
+              break;
+            } catch (cloneError) {
+              const errorMessage = cloneError instanceof Error ? cloneError.message : String(cloneError);
+              lastError = cloneError instanceof Error ? cloneError : new Error(String(cloneError));
+              console.log(`Authentication method failed: ${this.sanitizeErrorMessage(errorMessage)}`);
+            }
+          }
+          
+          // If all methods failed, throw the last error
+          if (!cloned) {
+            if (lastError) {
+              throw lastError;
+            }
+            throw new Error('All authentication methods failed. Please verify the token has the "contents: read" permission.');
+          }
+        } else {
+          // For other Git providers, use their URL structure
+          authenticatedRepoUrl = repoUrl.replace(`${url.protocol}//`, `${url.protocol}//${authToken}@`);
+          await this.attemptRepositoryClone(authenticatedRepoUrl, this.workingDir);
+        }
+      } else {
+        // No auth token provided - try public access
+        console.log('Attempting to clone repository without authentication');
+        await this.attemptRepositoryClone(repoUrl, this.workingDir);
       }
-
-      // Clone the repository
-      console.log(`Cloning repository: ${repoUrl} to ${this.workingDir}`);
-      await execa('git', ['clone', authenticatedRepoUrl, this.workingDir]);
       
       // Configure Git for commits
       await execa('git', ['config', 'user.name', 'patchmycode'], { cwd: this.workingDir });
@@ -252,13 +320,64 @@ export class PatchClient {
         // Configure push URL with auth if needed
         if (authToken) {
           const url = new URL(repoUrl);
-          const authenticatedPushUrl = repoUrl.replace(`${url.protocol}//`, `${url.protocol}//${authToken}@`);
+          // Use proper GitHub authentication format based on token type
+          let authenticatedPushUrl;
+          
+          if (url.hostname === 'github.com') {
+            const tokenType = this.identifyTokenType(authToken);
+            
+            if (tokenType === 'GitHub App Installation Token') {
+              // For GitHub App installation tokens (ghs_*)
+              authenticatedPushUrl = `https://x-access-token:${authToken}@github.com${url.pathname}`;
+            } else if (tokenType === 'OAuth App Token') {
+              // For OAuth tokens
+              authenticatedPushUrl = `https://oauth2:${authToken}@github.com${url.pathname}`;
+            } else if (tokenType === 'Personal Access Token' || tokenType === 'Fine-grained Personal Access Token') {
+              // For PATs
+              authenticatedPushUrl = `https://oauth2:${authToken}@github.com${url.pathname}`;
+            } else {
+              // Fallback for unknown token types - try x-access-token format
+              authenticatedPushUrl = `https://x-access-token:${authToken}@github.com${url.pathname}`;
+              console.log('Using x-access-token format for GitHub authentication');
+            }
+          } else {
+            // For non-GitHub repositories
+            authenticatedPushUrl = repoUrl.replace(`${url.protocol}//`, `${url.protocol}//${authToken}@`);
+          }
+          
+          // Apply the authenticated URL for push
+          console.log(`Configuring authenticated remote for pushing to ${url.hostname}${url.pathname}`);
           await execa('git', ['remote', 'set-url', 'origin', authenticatedPushUrl], { cwd: this.workingDir });
         }
         
         // Push the changes
         console.log(`Pushing changes to branch: ${branchName}`);
-        await execa('git', ['push', 'origin', branchName], { cwd: this.workingDir });
+        // Set environment variables for Git to prevent prompting
+        const pushEnv = { 
+          ...process.env, 
+          GIT_TERMINAL_PROMPT: '0',
+          GIT_ASKPASS: 'echo',
+          GCM_INTERACTIVE: 'never'
+        };
+        
+        try {
+          await execa('git', ['push', 'origin', branchName], { 
+            cwd: this.workingDir,
+            env: pushEnv,
+            timeout: 60000 // 1 minute timeout for push
+          });
+        } catch (pushError) {
+          const errorMessage = pushError instanceof Error ? pushError.message : String(pushError);
+          console.error(`Push error (sanitized): ${this.sanitizeErrorMessage(errorMessage)}`);
+          
+          if (errorMessage.includes('could not read Username') || 
+              errorMessage.includes('Authentication failed') ||
+              errorMessage.includes('403') || 
+              errorMessage.includes('401')) {
+            throw new Error('Failed to push changes: Authentication error. The token may not have write access to this repository.');
+          }
+          throw new Error(`Failed to push changes: ${this.sanitizeErrorMessage(errorMessage)}`);
+        }
         
         return {
           success: true,
@@ -278,9 +397,13 @@ export class PatchClient {
       
       // Try to get additional information from the error
       let errorMessage = error instanceof Error ? error.message : String(error);
-      const fullError = errorMessage; // Keep the full error for logging
       
-      // Log the full error for debugging
+      // Sanitize error message to remove any tokens
+      errorMessage = this.sanitizeErrorMessage(errorMessage);
+      
+      const fullError = errorMessage; // Keep the sanitized error for logging
+      
+      // Log the sanitized error for debugging
       console.error('Full Aider error:', fullError);
       
       // Check for specific error types
@@ -305,12 +428,12 @@ export class PatchClient {
         errorMessage = `Aider command line error: ${errorMessage}\n\nThis may be due to version differences. Try updating Aider: pip install -U aider-chat`;
       }
       
-      // If using Claude model, add specific advice
+      // Log Claude-specific advice to console, but don't include it in the user-facing error message
       if (this.isClaudeModel()) {
-        errorMessage += '\n\nAdditional Claude troubleshooting:\n' +
-          '• Make sure ANTHROPIC_API_KEY is set and valid\n' +
-          '• Try different flags for Claude in AIDER_EXTRA_ARGS (--anthropic or --claude)\n' +
-          '• Check Aider version compatibility with Claude models';
+        console.log('Additional Claude troubleshooting (for developers):');
+        console.log('• Make sure ANTHROPIC_API_KEY is set and valid');
+        console.log('• Try different flags for Claude in AIDER_EXTRA_ARGS (--anthropic or --claude)');
+        console.log('• Check Aider version compatibility with Claude models');
       }
       
       return {
@@ -322,6 +445,29 @@ export class PatchClient {
       // Clean up
       await this.cleanup();
     }
+  }
+
+  /**
+   * Sanitize error messages to remove sensitive information like tokens
+   */
+  private sanitizeErrorMessage(message: string): string {
+    // Remove any GitHub tokens that might be in error messages
+    message = message.replace(/https:\/\/[^@:]+:[^@:]+@/g, 'https://');
+    message = message.replace(/https:\/\/[^@:]+@/g, 'https://');
+    
+    // Specifically handle GitHub tokens (ghs_*)
+    message = message.replace(/ghs_[a-zA-Z0-9]{16,}/g, 'ghs_REDACTED');
+    
+    // Remove any filepath with potential tokens
+    message = message.replace(/clone\s+['"]https:\/\/.*?@.*?['"]/, 'clone [REPOSITORY_URL]');
+    message = message.replace(/git clone\s+'[^']*'/g, 'git clone [REPOSITORY_URL]');
+    message = message.replace(/git clone\s+"[^"]*"/g, 'git clone [REPOSITORY_URL]');
+    
+    // Remove any API keys that might be in the message
+    message = message.replace(/key[-_][a-zA-Z0-9]{20,}/g, 'key-REDACTED');
+    message = message.replace(/sk[-_][a-zA-Z0-9]{20,}/g, 'sk-REDACTED');
+    
+    return message;
   }
 
   /**
@@ -337,5 +483,92 @@ export class PatchClient {
         console.error('Error cleaning up Aider working directory:', error);
       }
     }
+  }
+
+  /**
+   * Validate GitHub token format
+   */
+  private isValidGitHubToken(token: string): boolean {
+    // Check for common GitHub token formats
+    const githubPAT = /^ghp_[a-zA-Z0-9]{20,}$/;           // Personal Access Token
+    const githubOAuth = /^gho_[a-zA-Z0-9]{20,}$/;         // OAuth Access Token
+    const githubInstall = /^ghs_[a-zA-Z0-9]{20,}$/;       // GitHub App Installation Token
+    const githubUser = /^github_pat_[a-zA-Z0-9_]{20,}$/;   // Fine-grained PAT
+    
+    // If it matches a known pattern, great
+    if (githubPAT.test(token) || 
+        githubOAuth.test(token) || 
+        githubInstall.test(token) || 
+        githubUser.test(token)) {
+      return true;
+    }
+    
+    // Otherwise, check for basic requirements (some minimum length and no whitespace)
+    // This is to accommodate different token formats while still catching obvious errors
+    return token.length >= 10 && !/\s/.test(token);
+  }
+
+  /**
+   * Attempts to clone a repository with proper error handling
+   */
+  private async attemptRepositoryClone(repoUrl: string, targetDir: string): Promise<void> {
+    // Safely log the clone attempt without exposing tokens
+    const safeUrl = repoUrl.replace(/\/\/[^@]+@/, '//').replace(/\/\/[^@:]+:[^@:]+@/, '//');
+    console.log(`Cloning repository from ${safeUrl} to ${targetDir}`);
+    
+    try {
+      // Setup environment for git
+      const cloneEnv = { 
+        ...process.env, 
+        GIT_TERMINAL_PROMPT: '0',
+        GIT_ASKPASS: 'echo',
+        GCM_INTERACTIVE: 'never' // Disable GitHub credential manager interactive prompts
+      };
+      
+      // Clone with credentials in environment and URL
+      await execa('git', ['clone', repoUrl, targetDir, '--depth', '1'], { 
+        env: cloneEnv, 
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 60000 // 1 minute timeout for clone
+      });
+      
+      console.log('Repository clone successful');
+    } catch (cloneError) {
+      const errorMessage = cloneError instanceof Error ? cloneError.message : String(cloneError);
+      
+      // Check for common auth errors
+      if (errorMessage.includes('Authentication failed') || 
+          errorMessage.includes('Invalid username or password') ||
+          errorMessage.includes('could not read Username') ||
+          errorMessage.includes('403') ||
+          errorMessage.includes('401')) {
+        
+        // Provide specific error for permission issues
+        if (errorMessage.includes('Permission to') && errorMessage.includes('denied')) {
+          throw new Error('Permission denied. The token does not have access to this repository. Check that it has "contents: read" permission.');
+        }
+        
+        throw new Error('Authentication failed. Token may be invalid or missing required permissions (needs "contents: read" at minimum).');
+      }
+      
+      // For timeout errors
+      if (errorMessage.includes('timed out') || errorMessage.includes('ETIMEDOUT')) {
+        throw new Error('Repository clone timed out. Check network connectivity or repository size.');
+      }
+      
+      // For other errors, provide the sanitized message
+      throw new Error(`Repository clone failed: ${this.sanitizeErrorMessage(errorMessage)}`);
+    }
+  }
+
+  /**
+   * Identify the type of token provided
+   */
+  private identifyTokenType(token: string): string {
+    if (token.startsWith('ghp_')) return 'Personal Access Token';
+    if (token.startsWith('gho_')) return 'OAuth App Token';
+    if (token.startsWith('ghs_')) return 'GitHub App Installation Token';
+    if (token.startsWith('github_pat_')) return 'Fine-grained Personal Access Token';
+    return 'Unknown Token Type';
   }
 }

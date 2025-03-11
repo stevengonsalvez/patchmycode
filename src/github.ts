@@ -233,9 +233,19 @@ export class GitHubClient {
   async getInstallationToken(): Promise<string> {
     await this.waitForRateLimit();
     try {
+      // Explicitly request required permissions for repository operations
       const { data } = await this.context.octokit.apps.createInstallationAccessToken({
         installation_id: this.context.payload.installation.id,
+        repositories: [this.context.payload.repository.name], // Limit to this repo only
+        permissions: {
+          contents: 'write',  // Essential for cloning and pushing changes
+          pull_requests: 'write', // For creating PRs
+          issues: 'write',    // For commenting on issues
+          metadata: 'read'    // For repo metadata
+        }
       });
+      
+      console.log(`Generated installation token with permissions: ${JSON.stringify(data.permissions)}`);
       return data.token;
     } catch (error) {
       console.error(`Error getting installation token: ${error instanceof Error ? error.message : String(error)}`);
