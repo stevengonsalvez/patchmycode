@@ -289,108 +289,234 @@ export class PatchClient {
       console.log('- OPENAI_API_KEY:', env.OPENAI_API_KEY ? 'Set' : 'Not set');
       console.log('- ANTHROPIC_API_KEY:', env.ANTHROPIC_API_KEY ? 'Set' : 'Not set');
       
-      // Run Aider with the issue file
-      const { stdout, stderr } = await execa('aider', aiderArgs, {
-        cwd: this.workingDir,
-        timeout: this.options.timeout,
-        env
-      });
+      // Run Aider with the issue file and stream output in real-time
+      console.log('Starting Aider process - streaming output:');
+      console.log('--------------------------------------------------');
       
-      // Log Aider output for debugging
-      console.log('Aider stdout:', stdout);
-      if (stderr) console.error('Aider stderr:', stderr);
+      // Setup a check interval to detect if Aider is stuck
+      let lastOutputTime = Date.now();
+      let aiderActive = true;
+      const activityInterval = setInterval(() => {
+        const timeSinceLastOutput = Date.now() - lastOutputTime;
+        if (aiderActive && timeSinceLastOutput > 30000) { // 30 seconds
+          console.log(`[MONITOR] No output from Aider for ${Math.floor(timeSinceLastOutput/1000)} seconds. Still working...`);
+        }
+      }, 30000);
       
-      // Check if Aider made any changes
-      const gitStatus = await execa('git', ['status', '--porcelain'], { cwd: this.workingDir });
-      const hasChanges = gitStatus.stdout.trim().length > 0;
+      let progressInterval: NodeJS.Timeout | null = null;
       
-      if (hasChanges) {
-        // Get the list of changed files
-        const changedFiles = gitStatus.stdout
-          .split('\n')
-          .filter(Boolean)
-          .map(line => line.substring(3));
+      try {
+        // Use execa with streaming output
+        const aiderProcess = execa('aider', aiderArgs, {
+          cwd: this.workingDir,
+          env,
+          timeout: this.options.timeout,
+          // Stream the output
+          stdout: 'pipe',
+          stderr: 'pipe',
+          buffer: false // Important for real-time streaming
+        });
         
-        console.log(`Changes detected in ${changedFiles.length} files:`, changedFiles);
-        
-        // Commit the changes
-        await execa('git', ['add', '.'], { cwd: this.workingDir });
-        await execa('git', ['commit', '-m', `Fix: ${issueTitle}`], { cwd: this.workingDir });
-        
-        // Configure push URL with auth if needed
-        if (authToken) {
-          const url = new URL(repoUrl);
-          // Use proper GitHub authentication format based on token type
-          let authenticatedPushUrl;
-          
-          if (url.hostname === 'github.com') {
-            const tokenType = this.identifyTokenType(authToken);
-            
-            if (tokenType === 'GitHub App Installation Token') {
-              // For GitHub App installation tokens (ghs_*)
-              authenticatedPushUrl = `https://x-access-token:${authToken}@github.com${url.pathname}`;
-            } else if (tokenType === 'OAuth App Token') {
-              // For OAuth tokens
-              authenticatedPushUrl = `https://oauth2:${authToken}@github.com${url.pathname}`;
-            } else if (tokenType === 'Personal Access Token' || tokenType === 'Fine-grained Personal Access Token') {
-              // For PATs
-              authenticatedPushUrl = `https://oauth2:${authToken}@github.com${url.pathname}`;
-            } else {
-              // Fallback for unknown token types - try x-access-token format
-              authenticatedPushUrl = `https://x-access-token:${authToken}@github.com${url.pathname}`;
-              console.log('Using x-access-token format for GitHub authentication');
+        // Stream stdout with timestamp updates
+        if (aiderProcess.stdout) {
+          aiderProcess.stdout.on('data', (data) => {
+            const output = data.toString();
+            if (output.trim()) {
+              console.log(`[AIDER] ${output.trim()}`);
+              lastOutputTime = Date.now();
             }
-          } else {
-            // For non-GitHub repositories
-            authenticatedPushUrl = repoUrl.replace(`${url.protocol}//`, `${url.protocol}//${authToken}@`);
-          }
-          
-          // Apply the authenticated URL for push
-          console.log(`Configuring authenticated remote for pushing to ${url.hostname}${url.pathname}`);
-          await execa('git', ['remote', 'set-url', 'origin', authenticatedPushUrl], { cwd: this.workingDir });
-        }
-        
-        // Push the changes
-        console.log(`Pushing changes to branch: ${branchName}`);
-        // Set environment variables for Git to prevent prompting
-        const pushEnv = { 
-          ...process.env, 
-          GIT_TERMINAL_PROMPT: '0',
-          GIT_ASKPASS: 'echo',
-          GCM_INTERACTIVE: 'never'
-        };
-        
-        try {
-          await execa('git', ['push', 'origin', branchName], { 
-            cwd: this.workingDir,
-            env: pushEnv,
-            timeout: 60000 // 1 minute timeout for push
           });
-        } catch (pushError) {
-          const errorMessage = pushError instanceof Error ? pushError.message : String(pushError);
-          console.error(`Push error (sanitized): ${this.sanitizeErrorMessage(errorMessage)}`);
-          
-          if (errorMessage.includes('could not read Username') || 
-              errorMessage.includes('Authentication failed') ||
-              errorMessage.includes('403') || 
-              errorMessage.includes('401')) {
-            throw new Error('Failed to push changes: Authentication error. The token may not have write access to this repository.');
-          }
-          throw new Error(`Failed to push changes: ${this.sanitizeErrorMessage(errorMessage)}`);
         }
         
-        return {
-          success: true,
-          changes: changedFiles,
-          message: 'Successfully applied fixes'
-        };
-      } else {
-        console.log('No changes were made by Aider');
+        // Stream stderr
+        if (aiderProcess.stderr) {
+          aiderProcess.stderr.on('data', (data) => {
+            const output = data.toString();
+            if (output.trim()) {
+              console.error(`[AIDER ERROR] ${output.trim()}`);
+              lastOutputTime = Date.now();
+            }
+          });
+        }
+        
+        // Start a progress indicator
+        let progressDots = 0;
+        progressInterval = setInterval(() => {
+          if (aiderActive) {
+            process.stdout.write('.');
+            progressDots++;
+            if (progressDots % 60 === 0) {
+              process.stdout.write('\n');
+            }
+          }
+        }, 5000);
+        
+        // Wait for Aider to complete
+        const { stdout, stderr } = await aiderProcess;
+        
+        // Clear intervals once Aider is done
+        clearInterval(activityInterval);
+        if (progressInterval) clearInterval(progressInterval);
+        aiderActive = false;
+        
+        // Add a newline if we were printing dots
+        if (progressDots > 0 && progressDots % 60 !== 0) {
+          console.log('');
+        }
+        
+        console.log('--------------------------------------------------');
+        console.log('Aider process completed');
+        
+        // Check if Aider made any changes
+        console.log('Checking for changes made by Aider...');
+        const gitStatus = await execa('git', ['status', '--porcelain'], { cwd: this.workingDir });
+        const hasChanges = gitStatus.stdout.trim().length > 0;
+        
+        if (hasChanges) {
+          // Get the list of changed files
+          const changedFiles = gitStatus.stdout
+            .split('\n')
+            .filter(Boolean)
+            .map(line => line.substring(3));
+          
+          console.log(`Changes detected in ${changedFiles.length} files:`, changedFiles);
+          
+          // Commit the changes
+          await execa('git', ['add', '.'], { cwd: this.workingDir });
+          await execa('git', ['commit', '-m', `Fix: ${issueTitle}`], { cwd: this.workingDir });
+          
+          // Configure push URL with auth if needed
+          if (authToken) {
+            const url = new URL(repoUrl);
+            // Use proper GitHub authentication format based on token type
+            let authenticatedPushUrl;
+            
+            if (url.hostname === 'github.com') {
+              const tokenType = this.identifyTokenType(authToken);
+              
+              if (tokenType === 'GitHub App Installation Token') {
+                // For GitHub App installation tokens (ghs_*)
+                authenticatedPushUrl = `https://x-access-token:${authToken}@github.com${url.pathname}`;
+              } else if (tokenType === 'OAuth App Token') {
+                // For OAuth tokens
+                authenticatedPushUrl = `https://oauth2:${authToken}@github.com${url.pathname}`;
+              } else if (tokenType === 'Personal Access Token' || tokenType === 'Fine-grained Personal Access Token') {
+                // For PATs
+                authenticatedPushUrl = `https://oauth2:${authToken}@github.com${url.pathname}`;
+              } else {
+                // Fallback for unknown token types - try x-access-token format
+                authenticatedPushUrl = `https://x-access-token:${authToken}@github.com${url.pathname}`;
+                console.log('Using x-access-token format for GitHub authentication');
+              }
+            } else {
+              // For non-GitHub repositories
+              authenticatedPushUrl = repoUrl.replace(`${url.protocol}//`, `${url.protocol}//${authToken}@`);
+            }
+            
+            // Apply the authenticated URL for push
+            console.log(`Configuring authenticated remote for pushing to ${url.hostname}${url.pathname}`);
+            await execa('git', ['remote', 'set-url', 'origin', authenticatedPushUrl], { cwd: this.workingDir });
+          }
+          
+          // Push the changes
+          console.log(`Pushing changes to branch: ${branchName}`);
+          // Set environment variables for Git to prevent prompting
+          const pushEnv = { 
+            ...process.env, 
+            GIT_TERMINAL_PROMPT: '0',
+            GIT_ASKPASS: 'echo',
+            GCM_INTERACTIVE: 'never'
+          };
+          
+          try {
+            await execa('git', ['push', 'origin', branchName], { 
+              cwd: this.workingDir,
+              env: pushEnv,
+              timeout: 60000 // 1 minute timeout for push
+            });
+          } catch (pushError) {
+            const errorMessage = pushError instanceof Error ? pushError.message : String(pushError);
+            console.error(`Push error (sanitized): ${this.sanitizeErrorMessage(errorMessage)}`);
+            
+            if (errorMessage.includes('could not read Username') || 
+                errorMessage.includes('Authentication failed') ||
+                errorMessage.includes('403') || 
+                errorMessage.includes('401')) {
+              throw new Error('Failed to push changes: Authentication error. The token may not have write access to this repository.');
+            }
+            throw new Error(`Failed to push changes: ${this.sanitizeErrorMessage(errorMessage)}`);
+          }
+          
+          return {
+            success: true,
+            changes: changedFiles,
+            message: 'Successfully applied fixes'
+          };
+        } else {
+          console.log('No changes were made by Aider');
+          return {
+            success: false,
+            changes: [],
+            message: 'Aider did not make any changes to the codebase'
+          };
+        }
+      } catch (error) {
+        // Make sure to clean up intervals if there's an error
+        clearInterval(activityInterval);
+        if (progressInterval) clearInterval(progressInterval);
+        aiderActive = false;
+        
+        console.error('Error running Aider:', error);
+        
+        // Try to get additional information from the error
+        let errorMessage = error instanceof Error ? error.message : String(error);
+        
+        // Sanitize error message to remove any tokens
+        errorMessage = this.sanitizeErrorMessage(errorMessage);
+        
+        const fullError = errorMessage; // Keep the sanitized error for logging
+        
+        // Log the sanitized error for debugging
+        console.error('Full Aider error:', fullError);
+        
+        // Check for specific error types
+        if (errorMessage.includes('OPENAI_API_KEY') || errorMessage.includes('openai.error.AuthenticationError')) {
+          if (this.isClaudeModel()) {
+            errorMessage = 'API key error with Claude model. Trying these fixes:\n' +
+              '1. Set both ANTHROPIC_API_KEY and a dummy OPENAI_API_KEY\n' +
+              '2. Try different Claude flags: --anthropic, --claude, or --use-anthropic\n' +
+              '3. Update to the latest version of Aider: pip install -U aider-chat';
+          } else {
+            errorMessage = 'OpenAI API key is missing or invalid. Please set the OPENAI_API_KEY environment variable.';
+          }
+        } else if (errorMessage.includes('ANTHROPIC_API_KEY') || 
+                  errorMessage.includes('anthropic.AuthenticationError') ||
+                  errorMessage.includes('anthropic.api_key')) {
+          errorMessage = 'Anthropic API key is missing or invalid. Please set the ANTHROPIC_API_KEY environment variable.';
+        } else if (errorMessage.includes('ENOENT') && errorMessage.includes('aider')) {
+          errorMessage = 'Aider executable not found. Please install Aider with: pip install aider-chat';
+        } else if (errorMessage.includes('ETIMEDOUT') || errorMessage.includes('timeout')) {
+          errorMessage = `Aider operation timed out after ${this.options.timeout ? this.options.timeout / 1000 : 300} seconds`;
+        } else if (errorMessage.includes('unrecognized arguments')) {
+          errorMessage = `Aider command line error: ${errorMessage}\n\nThis may be due to version differences. Try updating Aider: pip install -U aider-chat`;
+        }
+        
+        // Log Claude-specific advice to console, but don't include it in the user-facing error message
+        if (this.isClaudeModel()) {
+          console.log('Additional Claude troubleshooting (for developers):');
+          console.log('• Make sure ANTHROPIC_API_KEY is set and valid');
+          console.log('• Try different flags for Claude in AIDER_EXTRA_ARGS (--anthropic or --claude)');
+          console.log('• Check Aider version compatibility with Claude models');
+        }
+        
         return {
           success: false,
           changes: [],
-          message: 'Aider did not make any changes to the codebase'
+          message: `Error running Aider: ${errorMessage}`
         };
+      } finally {
+        // Clean up
+        await this.cleanup();
       }
     } catch (error) {
       console.error('Error running Aider:', error);
@@ -441,9 +567,6 @@ export class PatchClient {
         changes: [],
         message: `Error running Aider: ${errorMessage}`
       };
-    } finally {
-      // Clean up
-      await this.cleanup();
     }
   }
 
