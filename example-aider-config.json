@@ -28,6 +28,14 @@
     "hybrid": "claude-3-opus",
     "default": "gpt-4o"
   },
+  "providerMap": {
+    "architect": "anthropic",
+    "patcher": "openai",
+    "hybrid:security": "anthropic",
+    "hybrid:performance": "openai",
+    "hybrid:typescript-migration": "openrouter",
+    "default": "openai"
+  },
   "systemPrompts": {
     "architect": "You are an expert software architect with deep knowledge of design patterns and software engineering principles. Focus on high-level design, refactoring, and code organization. Think about maintainability, extensibility, and adherence to SOLID principles. Prefer clear, modular designs over clever tricks.",
     "patcher": "You are an expert code editor with a keen eye for bugs and implementation details. Focus on fixing specific issues with minimal changes. Prioritize correctness, security, and performance in that order. Maintain the existing code style and patterns unless there's a compelling reason to change them.",

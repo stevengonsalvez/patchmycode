@@ -25,6 +25,7 @@ export interface PatchOptions {
   openaiKey?: string;
   anthropicKey?: string;
   openrouterKey?: string;
+  modelProvider?: string;
 }
 
 // Model provider interface for better abstraction
@@ -238,11 +239,12 @@ export class PatchClient {
       excludeFiles: options.excludeFiles || config.excludeFiles,
       openaiKey: options.openaiKey,
       anthropicKey: options.anthropicKey,
-      openrouterKey: options.openrouterKey
+      openrouterKey: options.openrouterKey,
+      modelProvider: options.modelProvider || config.modelProvider
     };
     
     // Create the appropriate model provider
-    this.modelProvider = createModelProvider(this.options);
+    this.modelProvider = this.getModelProvider();
   }
   
   /**
@@ -319,6 +321,30 @@ export class PatchClient {
    * Get the model-specific provider for the current configuration
    */
   private getModelProvider(): ModelProvider {
+    // First check for explicitly configured provider
+    const provider = this.getProviderForCurrentMode();
+    
+    if (provider) {
+      // Use explicitly configured provider
+      switch (provider) {
+        case 'anthropic':
+          return new AnthropicProvider(
+            this.options.anthropicKey, 
+            config.anthropicKeys
+          );
+        case 'openrouter':
+          return new OpenRouterProvider(
+            this.options.openrouterKey || config.openrouterKey
+          );
+        case 'openai':
+          return new OpenAIProvider(
+            this.options.openaiKey, 
+            config.openaiKeys
+          );
+      }
+    }
+    
+    // If no explicit provider, fall back to model name detection
     const modelName = this.getModelForCurrentMode();
     
     if (modelName.includes('claude')) {
@@ -335,6 +361,29 @@ export class PatchClient {
         config.openaiKeys
       );
     }
+  }
+  
+  /**
+   * Get the provider for the current mode, prioritizing mode-specific settings
+   */
+  private getProviderForCurrentMode(): string | undefined {
+    // Check if we have mode-specific provider
+    if (config.modeProviders && this.options.mode && config.modeProviders[this.options.mode]) {
+      return config.modeProviders[this.options.mode];
+    }
+    
+    // Check for default provider in mode providers
+    if (config.modeProviders && config.modeProviders['default']) {
+      return config.modeProviders['default'];
+    }
+    
+    // Check for global provider
+    if (this.options.modelProvider) {
+      return this.options.modelProvider;
+    }
+    
+    // Finally check for config default
+    return config.modelProvider;
   }
   
   /**

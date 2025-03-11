@@ -18,10 +18,12 @@ export interface PatchBotConfig {
   // LLM configuration
   model?: string;                // Default LLM model to use
   extraArgs?: string[];          // Default additional arguments to pass to the LLM
+  modelProvider?: string;        // Default model provider to use (openai, anthropic, openrouter)
   
   // Mode-specific LLM configuration
   modeModels?: Record<string, string>; // Mapping of modes to specific models
   modeExtraArgs?: Record<string, string[]>; // Mapping of modes to specific extra args
+  modeProviders?: Record<string, string>; // Mapping of modes to specific providers
   
   // API Keys configuration
   openaiKeys?: string[];         // OpenAI API keys for load balancing
@@ -147,6 +149,48 @@ const getModeExtraArgs = (): Record<string, string[]> => {
   return modeExtraArgs;
 };
 
+// Create a map for mode-specific providers
+const getModeProviders = (): Record<string, string> => {
+  const modeProviders: Record<string, string> = {};
+  
+  // Check for default provider
+  const defaultProvider = process.env.PATCH_MODEL_PROVIDER;
+  if (defaultProvider) {
+    // This will be the fallback for modes without specific providers
+    modeProviders['default'] = defaultProvider.toLowerCase();
+  }
+  
+  // Check for architect mode provider
+  const architectProvider = process.env.PATCH_MODEL_PROVIDER_ARCHITECT;
+  if (architectProvider) {
+    modeProviders['architect'] = architectProvider.toLowerCase();
+  }
+  
+  // Check for patcher mode provider
+  const patcherProvider = process.env.PATCH_MODEL_PROVIDER_PATCHER;
+  if (patcherProvider) {
+    modeProviders['patcher'] = patcherProvider.toLowerCase();
+  }
+  
+  // Check for hybrid mode providers
+  const securityProvider = process.env.PATCH_MODEL_PROVIDER_HYBRID_SECURITY;
+  if (securityProvider) {
+    modeProviders['hybrid:security'] = securityProvider.toLowerCase();
+  }
+  
+  const performanceProvider = process.env.PATCH_MODEL_PROVIDER_HYBRID_PERFORMANCE;
+  if (performanceProvider) {
+    modeProviders['hybrid:performance'] = performanceProvider.toLowerCase();
+  }
+  
+  const typescriptProvider = process.env.PATCH_MODEL_PROVIDER_HYBRID_TYPESCRIPT;
+  if (typescriptProvider) {
+    modeProviders['hybrid:typescript'] = typescriptProvider.toLowerCase();
+  }
+  
+  return modeProviders;
+};
+
 // Get multiple API keys
 const getApiKeys = (): {
   openaiKeys: string[];
@@ -209,10 +253,12 @@ const config: PatchBotConfig = {
   // LLM configuration
   model: getEnv('PATCH_MODEL', 'gpt-4-turbo'),
   extraArgs: getArrayEnv('PATCH_EXTRA_ARGS'),
+  modelProvider: getEnv('PATCH_MODEL_PROVIDER', ''),
   
   // Mode-specific LLM configuration
   modeModels: getModeModels(),
   modeExtraArgs: getModeExtraArgs(),
+  modeProviders: getModeProviders(),
   
   // API Keys configuration
   ...getApiKeys(),

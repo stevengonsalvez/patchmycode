@@ -81,7 +81,13 @@ Create a `.patchmycode/config.json` file in your repository to customize behavio
   },
   "modelMap": {
     "architect": "claude-3-7-sonnet",
-    "patcher": "gpt-4o"
+    "patcher": "gpt-4o",
+    "hybrid:security": "claude-3-opus-20240229"
+  },
+  "providerMap": {
+    "architect": "anthropic",
+    "patcher": "openai",
+    "hybrid:security": "anthropic"
   }
 }
 ```
@@ -175,6 +181,14 @@ You can set models globally or per mode:
   - `PATCH_MODEL_HYBRID_SECURITY`: Model for security hybrid mode
   - `PATCH_MODEL_HYBRID_PERFORMANCE`: Model for performance hybrid mode
   - `PATCH_MODEL_HYBRID_TYPESCRIPT`: Model for TypeScript hybrid mode
+
+- **Model provider configuration**:
+  - `PATCH_MODEL_PROVIDER`: Explicitly specify which provider to use (openai, anthropic, openrouter)
+  - `PATCH_MODEL_PROVIDER_ARCHITECT`: Provider for architect mode
+  - `PATCH_MODEL_PROVIDER_PATCHER`: Provider for patcher mode
+  - `PATCH_MODEL_PROVIDER_HYBRID_SECURITY`: Provider for security hybrid mode
+  - `PATCH_MODEL_PROVIDER_HYBRID_PERFORMANCE`: Provider for performance hybrid mode
+  - `PATCH_MODEL_PROVIDER_HYBRID_TYPESCRIPT`: Provider for TypeScript hybrid mode
 
 - **Model-specific arguments**:
   - `PATCH_EXTRA_ARGS`: Global extra arguments for Aider
