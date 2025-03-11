@@ -537,65 +537,48 @@ export class PatchClient {
       // Setup the model provider's environment variables
       this.modelProvider.setupEnvironment(processEnv);
       
-      // Run aider with a timeout
+      // Add YES_ALWAYS environment variable to make Aider auto-accept all prompts
+      processEnv.AIDER_YES_ALWAYS = '1';
+      
+      // Run aider directly without piping
+      console.log('Running aider with auto-accept prompts via AIDER_YES_ALWAYS=1');
+      
+      // Spawn aider process with appropriate configuration
       const aiderProcess = spawn('aider', args, {
         cwd: issueDir,
         stdio: 'pipe',
         env: processEnv
       });
       
-      // Helper function to send input to aider process with proper newline and flush
+      // Add error handling for stdin
+      aiderProcess.stdin.on('error', (err: NodeJS.ErrnoException) => {
+        console.error('[aider] Error with stdin:', err);
+        if (err.code === 'EPIPE') {
+          console.log('[aider] EPIPE error detected - process may have closed its input stream');
+          // We'll let the process continue as it might still be running
+        }
+      });
+      
+      // Helper function to send input to aider process if needed
       const sendInputToAider = (input: string): Promise<void> => {
         return new Promise<void>((resolve, reject) => {
-          // Add a slight delay to avoid racing with Aider's prompt processing
-          setTimeout(() => {
-            try {
-              // Make sure input always ends with a newline
-              const formattedInput = input.endsWith('\n') ? input : `${input}\n`;
-              
-              // Check if there's already text typed in the prompt (backspace and clear it first)
-              if (input === 'y' || input === 'n') {
-                // Send backspace and then our intended input (clears any potential existing input)
-                const backspace = '\b'.repeat(10); // Multiple backspaces to clear any existing input
-                aiderProcess.stdin.write(backspace, 'utf8', () => {
-                  console.log('[aider] Cleared input field before sending response');
-                  
-                  // Now write the actual input
-                  const success = aiderProcess.stdin.write(formattedInput, 'utf8', () => {
-                    // This callback ensures the write is completed
-                    aiderProcess.stdin.write('', () => {
-                      resolve();
-                    });
-                  });
-                  
-                  if (!success) {
-                    console.error('[aider] Failed to write to stdin!');
-                    reject(new Error('Failed to write to stdin'));
-                  }
-                });
-              } else {
-                // Normal path for non-yes/no inputs
-                // Write the input to stdin
-                const success = aiderProcess.stdin.write(formattedInput, 'utf8', () => {
-                  // This callback ensures the write is completed
-                  aiderProcess.stdin.write('', () => {
-                    resolve();
-                  });
-                });
-                
-                if (!success) {
-                  console.error('[aider] Failed to write to stdin!');
-                  reject(new Error('Failed to write to stdin'));
-                }
-              }
-            } catch (error) {
-              console.error('[aider] Error sending input:', error);
-              reject(error);
-            }
-          }, 100); // Small delay to ensure prompt is fully displayed
+          if (!aiderProcess || !aiderProcess.stdin.writable) {
+            return reject(new Error('Aider process is not available or stdin is not writable'));
+          }
+          
+          try {
+            // Make sure input always ends with a newline
+            const formattedInput = input.endsWith('\n') ? input : `${input}\n`;
+            aiderProcess.stdin.write(formattedInput, 'utf8', () => {
+              resolve();
+            });
+          } catch (error) {
+            console.error('[aider] Error sending input:', error);
+            reject(error);
+          }
         });
       };
-
+      
       let textOutput = '';
       let stderr = '';
       
@@ -618,267 +601,85 @@ export class PatchClient {
       
       // Data event received from Aider's stdout
       aiderProcess.stdout.on('data', (data: Buffer) => {
-        const chunk = data.toString();
-        textOutput += chunk;
-        console.log(`[aider] ${chunk}`);
-        
-        // Update activity timestamp
-        lastActivity = Date.now();
-        consecutiveHealthChecks = 0; // Reset health check counter on any output
-        
-        // Track if we've handled a prompt in this data chunk to avoid multiple responses
-        let hasHandledPrompt = false;
-        
-        // Critical section for "Edit the files?" prompt - use very aggressive detection
-        if (!hasHandledPrompt &&
-            (chunk.includes('Edit the files?') || 
-             chunk.includes('edit the files') || 
-             /\bedit.*\bfiles/i.test(chunk) ||
-             chunk.includes('Edit files?')) && 
-             (chunk.includes('(Y)') || chunk.includes('[Yes]') || chunk.includes('Y/N'))) {
+        try {
+          const chunk = data.toString();
+          textOutput += chunk;
+          console.log(`[aider] ${chunk}`);
           
-          // Mark that we've handled a prompt in this chunk
-          hasHandledPrompt = true;
+          // Update activity timestamp
+          lastActivity = Date.now();
+          consecutiveHealthChecks = 0; // Reset health check counter on any output
           
-          // Check if there's an 'n' response already in the same chunk
-          // This indicates that the prompt has already been answered negatively
-          if (chunk.match(/Edit the files\?\s*.*?\s*n$/i) ||
-              chunk.match(/Edit files\?\s*.*?\s*n$/i) ||
-              chunk.match(/\(Y\)es\/\(N\)o\s*.*?\s*n$/i)) {
-            console.log(''); 
-            console.log('⚠️ WARNING: Detected "n" response already in the same chunk as edit prompt!');
-            console.log('⚠️ Attempting to override with forced "y" response...');
-            
-            // Send multiple backspaces to clear the 'n', then send 'y'
-            try {
-              // First send 10 backspaces to clear any input
-              aiderProcess.stdin.write('\b'.repeat(10));
-              // Force through with a y and newline
-              aiderProcess.stdin.write('y\n');
-              console.log('✅ Sent backspaces and override "y" response');
-              
-              if (progressCallback) {
-                progressCallback('auto_response', { 
-                  prompt: 'CRITICAL_EDIT_FILES_OVERRIDE', 
-                  response: 'y', 
-                  text: 'Overrode n with y' 
-                });
-              }
-            } catch (err) {
-              console.error('[aider] Failed to override negative response:', err);
-            }
-          } else {
-            console.log('');
-            console.log('==================================================================');
-            console.log('🚨 CRITICAL EDIT PROMPT DETECTED - RESPONDING WITH FORCE "YES" 🚨');
-            console.log('==================================================================');
-            console.log('');
-            
-            // Force a response directly to stdin with newline and flush
-            try {
-              // Use a single response method to avoid race conditions
-              console.log('[aider] Sending YES response to edit files prompt');
-              
-              // Use the controlled helper function
-              sendInputToAider('y')
-                .then(() => console.log('[aider] YES response sent successfully'))
-                .catch(err => {
-                  console.error('[aider] Failed to send YES response:', err);
-                  
-                  // Only try the direct approach as a fallback
-                  try {
-                    console.log('[aider] Falling back to direct stdin write');
-                    aiderProcess.stdin.write('y\n');
-                  } catch (fallbackErr) {
-                    console.error('[aider] Even fallback failed:', fallbackErr);
-                  }
-                });
-              
-              if (progressCallback) {
-                progressCallback('auto_response', { prompt: 'CRITICAL_EDIT_FILES', response: 'y', text: chunk.trim() });
-              }
-            } catch (err) {
-              console.error('[aider] CRITICAL ERROR: Failed to handle edit files prompt:', err);
+          // We don't need complex prompt handling with 'yes' pipe approach
+          // Just log interesting events for monitoring
+          
+          // Check for specific patterns to report progress
+          if (progressCallback) {
+            if (chunk.includes('Edit the files?')) {
+              progressCallback('status', { status: 'edit_prompt' });
+              console.log('[aider] Edit files prompt detected (auto-responding with yes)');
+            } else if (chunk.includes('Sending request')) {
+              progressCallback('status', { status: 'thinking' });
+            } else if (chunk.includes('Committing')) {
+              progressCallback('status', { status: 'committing' });
+            } else if (chunk.includes('Applying changes')) {
+              progressCallback('status', { status: 'applying' });
+            } else if (/Changes to [0-9]+ files/.test(chunk)) {
+              progressCallback('status', { status: 'changes_detected' });
             }
           }
           
-          // Skip other prompt handlers for this chunk to avoid conflicting responses
-          return;
-        }
-        
-        // Define a function to handle prompt responses to avoid duplicate responses
-        let promptHandled = false;
-        const handlePrompt = (
-          pattern: string | RegExp | ((str: string) => boolean), 
-          response: string | ((str: string) => string), 
-          promptType: string
-        ) => {
-          // Skip if we've already handled a prompt in this chunk or this pattern
-          if (hasHandledPrompt || promptHandled) return false;
-          
-          let matches = false;
-          if (typeof pattern === 'string') {
-            matches = chunk.includes(pattern);
-          } else if (pattern instanceof RegExp) {
-            matches = pattern.test(chunk);
-          } else if (typeof pattern === 'function') {
-            matches = pattern(chunk);
+          // Publish to progress
+          if (progressCallback) {
+            progressCallback('output', { text: chunk });
           }
           
-          if (matches) {
-            // Get response (either static string or dynamic based on the chunk)
-            const responseText = typeof response === 'function' ? response(chunk) : response;
-            
-            // Mark as handled to prevent other handlers from firing
-            promptHandled = true;
-            hasHandledPrompt = true;
-            
-            // Use the new helper function to send input reliably
-            sendInputToAider(responseText)
-              .then(() => {
-                console.log(`[aider] Auto-responded "${responseText}" to ${promptType} prompt: ${chunk.trim()}`);
-              })
-              .catch(err => {
-                console.error(`[aider] Failed to send "${responseText}" response:`, err);
-              });
-            
-            if (progressCallback) {
-              progressCallback('auto_response', { prompt: promptType, response: responseText, text: chunk.trim() });
-            }
-            return true;
+          // Check for exit conditions
+          if (chunk.includes('I\'ll help you')) {
+            initialPromptReceived = true;
           }
-          return false;
-        };
-        
-        // Check for specific patterns to report progress
-        if (progressCallback) {
-          if (chunk.includes('Sending request')) {
-            progressCallback('status', { status: 'thinking' });
-          } else if (chunk.includes('Committing')) {
-            progressCallback('status', { status: 'committing' });
-          } else if (chunk.includes('Applying changes')) {
-            progressCallback('status', { status: 'applying' });
-          } else if (/Changes to [0-9]+ files/.test(chunk)) {
-            progressCallback('status', { status: 'changes_detected' });
+          
+          if (chunk.includes('Commit staged changes?')) {
+            console.log('[aider] Detected commit prompt, exiting soon.');
+            exitConditionMet = true;
           }
+          
+          if (chunk.includes('Goodbye!') || chunk.includes('Exiting')) {
+            console.log('[aider] Detected goodbye message, exiting.');
+            exitConditionMet = true;
+          }
+        } catch (err) {
+          console.error('[aider] Error handling stdout data:', err);
         }
-        
-        // If we've already handled a prompt in this chunk, skip the rest
-        if (hasHandledPrompt) {
-          console.log('[aider] Already handled a prompt in this chunk, skipping other handlers');
-        } else {
-          // Regular prompt handling
-          // Critical edit prompts - ALWAYS YES
-          handlePrompt('Edit the files?', 'y', 'edit_files');
-          handlePrompt('edit the files', 'y', 'edit_files_alt');
-          handlePrompt('Apply suggested changes?', 'y', 'apply_changes');
-          handlePrompt('apply changes', 'y', 'apply_changes_alt');
-          handlePrompt('Save changes?', 'y', 'save_changes');
-          handlePrompt('save changes', 'y', 'save_changes_alt');
+      });
+      
+      aiderProcess.stderr.on('data', (data) => {
+        try {
+          const chunk = data.toString();
+          stderr += chunk;
+          console.error(`[aider-err] ${chunk}`);
           
-          // URL-related prompts - NO
-          handlePrompt('Clone repo:', 'n', 'clone_repo');
-          handlePrompt('Open this URL?', 'n', 'open_url');
-          handlePrompt('open link', 'n', 'open_link');
-          handlePrompt('Open browser?', 'n', 'open_browser');
+          // Update activity timestamp
+          lastActivity = Date.now();
           
-          // File-related prompts
-          handlePrompt('Add file to the chat?', 'n', 'add_file');
-          
-          // Upgrade prompts
-          handlePrompt('Do you want to upgrade?', 'n', 'upgrade');
-          handlePrompt('Run pip install?', 'n', 'pip_install');
-          handlePrompt('Newer aider version', 'n', 'version_notice');
-          
-          // Permission-related prompts
-          handlePrompt('Do you want to allow', 'n', 'permission');
-          handlePrompt('Would you like me to', 'n', 'permission_alt');
-          
-          // Stage/commit prompts
-          handlePrompt('Stage these changes?', 'y', 'stage_changes');
-          handlePrompt('Commit staged changes?', 'y', 'commit_changes');
-          handlePrompt('stage changes', 'y', 'stage_changes_alt');
-          
-          // Continue/proceed prompts
-          handlePrompt('continue?', 'y', 'continue');
-          handlePrompt('proceed?', 'y', 'proceed');
-          
-          // Generic question detection with dynamic response
-          handlePrompt(
-            (str: string) => {
-              // Is this a question that ends with ? and is about editing files?
-              if (str.trim().endsWith('?')) {
-                const lowerStr = str.toLowerCase();
-                return lowerStr.includes('edit') && 
-                       (lowerStr.includes('file') || lowerStr.includes('change'));
-              }
-              return false;
-            },
-            (str: string) => {
-              console.log('[aider] Detected generic edit question:', str.trim());
-              return 'y';
-            },
-            'generic_edit_question'
-          );
-          
-          // Generic yes/no question with a default of "no"
-          handlePrompt(
-            (str: string) => str.includes('(Y/N)') || (str.includes('[') && str.includes(']')),
-            (str: string) => {
-              const lowerStr = str.toLowerCase();
-              // Say 'y' for anything to do with editing, saving, or applying changes
-              if (lowerStr.includes('edit') || lowerStr.includes('save') || 
-                  lowerStr.includes('change') || lowerStr.includes('apply')) {
-                console.log('[aider] Defaulting to YES for edit/save/change prompt');
-                return 'y';
-              } else {
-                console.log('[aider] Defaulting to NO for prompt:', str.trim());
-                return 'n';
-              }
-            },
-            'generic_question'
-          );
-          
-          // Catch-all for other patterns
-          handlePrompt(/\[Yes\]:(\s*)$/, 'y', 'default_yes');
-          handlePrompt(/\[[^\]]+\]:(\s*)$/, 'n', 'prompt_with_brackets');
-          handlePrompt(/\([YN]\)(\s*)$/, 'n', 'yn_choice');
-          handlePrompt(/\(Y\/n\)(\s*)$/, 'y', 'yes_default');
-          handlePrompt(/\(y\/N\)(\s*)$/, 'n', 'no_default');
-          handlePrompt(/\(yes\/no\)(\s*)$/, 'n', 'generic_choice');
-          handlePrompt(/\[No\]:(\s*)$/, 'n', 'default_no');
-        }
-        
-        // Publish to progress
-        if (progressCallback) {
-          progressCallback('output', { text: chunk });
-        }
-        
-        // Check for exit conditions
-        if (chunk.includes('I\'ll help you')) {
-          initialPromptReceived = true;
-        }
-        
-        if (chunk.includes('Commit staged changes? (Y)es/(N)o [Yes]:')) {
-          console.log('[aider] Detected commit prompt, exiting soon.');
-          exitConditionMet = true;
-        }
-        
-        if (chunk.includes('Goodbye!') || chunk.includes('Exiting')) {
-          console.log('[aider] Detected goodbye message, exiting.');
-          exitConditionMet = true;
+          // Send error updates if callback exists
+          if (progressCallback && chunk.trim()) {
+            progressCallback('error', { text: chunk });
+          }
+        } catch (err) {
+          console.error('[aider] Error handling stderr data:', err);
         }
       });
       
       // Setup a health check interval to verify process is still responsive
       const healthCheckInterval = setInterval(() => {
-        // If process is still running but not accepting input, this could be a sign of being stuck
-        if (aiderProcess.stdin.writable) {
+        // If process is still running but not active, this could be a sign of being stuck
+        if (aiderProcess && aiderProcess.stdin.writable) {
           // Only send a newline if there's been no activity for a while
           const inactiveSecs = (Date.now() - lastActivity) / 1000;
           if (inactiveSecs > 60) { // More than a minute of inactivity
             try {
-              // Sending a newline can sometimes unstick the process or at least trigger some output
+              // Send a newline to see if we get any response
               sendInputToAider('\n')
                 .then(() => {
                   console.log('[aider] Sent newline to check if process is responsive');
@@ -893,6 +694,11 @@ export class PatchClient {
                 })
                 .catch(err => {
                   console.error('[aider] Error sending health check:', err);
+                  // If we get an EPIPE error, the process is likely dead
+                  if (err.code === 'EPIPE') {
+                    console.error('[aider] EPIPE error - process appears to be dead. Forcing termination.');
+                    consecutiveHealthChecks = 5; // Force termination on next check
+                  }
                 });
               
               // If we've tried 5 consecutive health checks without any response, 
@@ -905,41 +711,32 @@ export class PatchClient {
                     inactive_seconds: inactiveSecs 
                   });
                 }
-                aiderProcess.kill('SIGTERM');
                 
-                // Give it 5 seconds to terminate gracefully, then force kill if needed
-                setTimeout(() => {
-                  try {
-                    // Check if process is still running and kill forcefully if needed
-                    if (aiderProcess.kill(0)) {
-                      console.error('[aider] Process still alive after SIGTERM. Sending SIGKILL...');
-                      aiderProcess.kill('SIGKILL');
+                try {
+                  aiderProcess.kill('SIGTERM');
+                  
+                  // Give it 5 seconds to terminate gracefully, then force kill if needed
+                  setTimeout(() => {
+                    try {
+                      // Check if process is still running and kill forcefully if needed
+                      if (aiderProcess.kill(0)) {
+                        console.error('[aider] Process still alive after SIGTERM. Sending SIGKILL...');
+                        aiderProcess.kill('SIGKILL');
+                      }
+                    } catch (e) {
+                      // If kill(0) throws, the process is already gone
                     }
-                  } catch (e) {
-                    // If kill(0) throws, the process is already gone
-                  }
-                }, 5000);
+                  }, 5000);
+                } catch (killError) {
+                  console.error('[aider] Error while trying to terminate process:', killError);
+                }
               }
             } catch (error) {
-              console.error('[aider] Error sending health check input:', error);
+              console.error('[aider] Error during health check:', error);
             }
           }
         }
       }, 60000); // Check every minute
-      
-      aiderProcess.stderr.on('data', (data) => {
-        const chunk = data.toString();
-        stderr += chunk;
-        console.error(`[aider-err] ${chunk}`);
-        
-        // Update activity timestamp
-        lastActivity = Date.now();
-        
-        // Send error updates if callback exists
-        if (progressCallback && chunk.trim()) {
-          progressCallback('error', { text: chunk });
-        }
-      });
       
       // Set timeout
       const timeout = setTimeout(() => {
