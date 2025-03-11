@@ -481,19 +481,20 @@ export class PatchClient {
       console.log(`Running aider with mode: ${this.options.mode}, model: ${model}`);
       console.log(`Arguments: ${args.join(' ')}`);
       
+      // Create environment with model provider setup
+      const processEnv = { ...process.env };
+      processEnv.AIDER_MODE = this.options.mode || 'patcher';
+      processEnv.AIDER_DEBUG = '1';
+      
+      // Setup the model provider's environment variables
+      this.modelProvider.setupEnvironment(processEnv);
+      
       // Run aider with a timeout
       const aiderProcess = spawn('aider', args, {
         cwd: issueDir,
         stdio: 'pipe',
-        env: {
-          ...process.env,
-          AIDER_MODE: this.options.mode || 'patcher',
-          AIDER_DEBUG: '1'
-        }
+        env: processEnv
       });
-      
-      // Setup the model provider's environment variables
-      this.modelProvider.setupEnvironment(aiderProcess.env as NodeJS.ProcessEnv);
       
       let stdout = '';
       let stderr = '';
