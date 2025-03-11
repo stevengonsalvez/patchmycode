@@ -1,0 +1,44 @@
+{
+  "defaultMode": "patcher",
+  "architectLabels": ["architecture", "refactor", "design-pattern", "technical-debt"],
+  "patcherLabels": ["bug", "fix", "security", "typo", "dependency"],
+  "hybridModes": {
+    "security": {
+      "name": "security",
+      "description": "Security-focused mode for identifying and fixing vulnerabilities",
+      "systemPrompt": "You are a security expert focusing on identifying and fixing vulnerabilities. Consider both architectural security patterns and specific code fixes. Pay special attention to input validation, authentication, authorization, and data handling.",
+      "aiderArgs": ["--apply", "--diff"]
+    },
+    "performance": {
+      "name": "performance",
+      "description": "Performance optimization mode",
+      "systemPrompt": "You are a performance optimization expert. Focus on identifying bottlenecks and implementing efficient algorithms and data structures. Consider time complexity, memory usage, and concurrency patterns.",
+      "aiderArgs": ["--apply", "--diff"]
+    },
+    "typescript-migration": {
+      "name": "typescript-migration",
+      "description": "Converts JavaScript code to TypeScript with proper typing",
+      "systemPrompt": "You are a TypeScript expert helping to convert JavaScript code to properly typed TypeScript. Add appropriate interfaces, types, and generics. Focus on maintaining the original functionality while adding type safety.",
+      "aiderArgs": ["--apply", "--diff", "--map"]
+    }
+  },
+  "modelMap": {
+    "architect": "claude-3-opus",
+    "patcher": "gpt-4o",
+    "hybrid": "claude-3-opus",
+    "default": "gpt-4o"
+  },
+  "providerMap": {
+    "architect": "anthropic",
+    "patcher": "openai",
+    "hybrid:security": "anthropic",
+    "hybrid:performance": "openai",
+    "hybrid:typescript-migration": "openrouter",
+    "default": "openai"
+  },
+  "systemPrompts": {
+    "architect": "You are an expert software architect with deep knowledge of design patterns and software engineering principles. Focus on high-level design, refactoring, and code organization. Think about maintainability, extensibility, and adherence to SOLID principles. Prefer clear, modular designs over clever tricks.",
+    "patcher": "You are an expert code editor with a keen eye for bugs and implementation details. Focus on fixing specific issues with minimal changes. Prioritize correctness, security, and performance in that order. Maintain the existing code style and patterns unless there's a compelling reason to change them.",
+    "default": "You are an AI assistant helping to improve code quality and fix issues. Balance between architectural improvements and specific fixes based on the context of the issue."
+  }
+} 

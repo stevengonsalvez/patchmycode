@@ -1,172 +1,245 @@
-# patchmycode
+# Probot Aider Bot
 
-> A GitHub App built with [Probot](https://github.com/probot/probot) that automatically fixes code issues with specific labels.
+A GitHub App built with [Probot](https://github.com/probot/probot) that automates issue resolution with the power of AI. This bot uses [Aider](https://github.com/paul-gauthier/aider) to generate code fixes based on GitHub issue descriptions.
 
-## Overview
+## Features
 
-The patchmycode bot is a GitHub App that automates issue resolution by leveraging AI-powered code fixes. When an issue is labeled with a trigger label (e.g., `fix:auto`), the bot:
+- **Smart Mode Selection**: Automatically determines the best mode (architect, patcher, or hybrid) for handling each issue based on labels and content
+- **Multi-Pass Processing**: Can perform architectural changes followed by detailed fixes for complex issues
+- **Custom Repository Configurations**: Repositories can customize behavior through a config file
+- **Visual Indicators**: Clear badges and labels to indicate which modes were used to fix issues
+- **Interactive Commands**: Respond to issue comments to analyze or select specific processing modes
 
-1. Clones the repository
-2. Uses AI to analyze the issue description and generate a fix
-3. Creates a pull request with the proposed changes
-4. Comments on the issue with a link to the PR
+## How It Works
 
-This automation helps reduce manual work for developers by providing automatic fixes for suitable issues.
+1. An issue is opened or labeled with a trigger label (e.g., `patchmycode:fix`)
+2. The bot analyzes the issue to select the appropriate mode
+3. Code changes are generated using Aider with the selected mode
+4. A pull request is created with the changes
+5. Visual badges show which modes were used in the PR
 
-## Prerequisites
+## Modes
 
-- Node.js 18+ and npm
-- A GitHub account
-- [Aider](https://aider.chat) installed (`pip install aider-chat`) (used as the underlying AI code assistant)
-- Access to an OpenAI/Anthropic API key for Aider to use
+### Architect Mode
+
+![Architect](https://img.shields.io/badge/Architect-8A2BE2)
+
+Designed for architectural changes, refactoring, and major restructuring. This mode focuses on:
+
+- Improving code organization
+- Implementing design patterns
+- Enhancing overall architecture
+- Refactoring for maintainability
+
+### Patcher Mode
+
+![Patcher](https://img.shields.io/badge/Patcher-2E8B57)
+
+Focused on targeted bug fixes and immediate problem resolution. This mode emphasizes:
+
+- Precise bug fixing
+- Minimal changes
+- Fast turnaround
+- Preserving existing code structure
+
+### Hybrid Modes
+
+Special purpose modes for specific tasks:
+
+- ![Security](https://img.shields.io/badge/Security-FF0000) **Security**: For vulnerability fixes and security improvements
+- ![Performance](https://img.shields.io/badge/Performance-FFA500) **Performance**: For optimizing code and improving efficiency
+- ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6) **TypeScript**: For TypeScript migrations and type improvements
+
+## Commands
+
+Use these commands in issue comments:
+
+- `/analyze` - Analyze the issue and recommend the best mode
+- `/mode architect` - Use architect mode for this issue
+- `/mode patcher` - Use patcher mode for this issue
+- `/mode hybrid:security` - Use security-focused hybrid mode
+- `/mode hybrid:performance` - Use performance-focused hybrid mode
+- `/mode hybrid:typescript` - Use TypeScript-focused hybrid mode
+- `/mode multipass` - Use a multi-pass approach (architect followed by patcher)
+- `/fix` - Fix the issue using the currently selected mode
+
+## Configuration
+
+Create a `.patchmycode/config.json` file in your repository to customize behavior:
+
+```json
+{
+  "defaultMode": "patcher",
+  "modeLabels": {
+    "architect": ["architecture", "refactor", "design"],
+    "patcher": ["bug", "fix", "typo"],
+    "hybrid:security": ["security", "vulnerability"]
+  },
+  "systemPrompts": {
+    "architect": "Custom system prompt for architect mode...",
+    "patcher": "Custom system prompt for patcher mode..."
+  },
+  "modelMap": {
+    "architect": "claude-3-7-sonnet",
+    "patcher": "gpt-4o",
+    "hybrid:security": "claude-3-opus-20240229"
+  },
+  "providerMap": {
+    "architect": "anthropic",
+    "patcher": "openai",
+    "hybrid:security": "anthropic"
+  }
+}
+```
 
 ## Setup
 
-### Local Development
+### Prerequisites
 
-```sh
+- Node.js 18+
+- Aider installed (`pip install aider-chat`)
+- GitHub App credentials
+- OpenAI API key and/or Anthropic API key
+
+### GitHub App Setup
+
+1. Go to [GitHub Developer Settings](https://github.com/settings/apps) and click "New GitHub App"
+2. Fill in the following details:
+   - **GitHub App name**: Choose a name for your app (e.g., "My patchmycode App")
+   - **Homepage URL**: Your website or repository URL
+   - **Webhook URL**: The URL where GitHub will send webhook events (e.g., `https://your-domain.com/api/github/webhooks` or use [smee.io](https://smee.io) for development)
+   - **Webhook secret**: Create a random string and save it for later
+3. Set the following permissions:
+   - **Repository permissions**:
+     - **Contents**: Read & write (for creating branches and commits)
+     - **Issues**: Read & write (for reading and commenting on issues)
+     - **Pull requests**: Read & write (for creating PRs)
+     - **Metadata**: Read-only
+   - **Subscribe to events**:
+     - **Issues**
+     - **Issue comment**
+     - **Label**
+     - **Pull request**
+4. Choose whether to install the app on all repositories or select repositories
+5. Click "Create GitHub App"
+6. After creation, note your **App ID** at the top of the page
+7. Generate a **Private key** by clicking "Generate a private key" in the "Private keys" section
+8. Install the app on your repositories by clicking "Install App" in the sidebar
+
+### Installation
+
+```bash
 # Clone the repository
-git clone https://github.com/your-username/patchmycode.git
-cd patchmycode
+git clone https://github.com/stevengonsalvez/probot-aider-bot.git
+cd probot-aider-bot
 
 # Install dependencies
 npm install
 
-# Copy and configure the environment file
+# Copy the example environment file
 cp .env.example .env
-# Edit .env to set your API keys and configuration
 
-# Start the app
+# Edit the .env file with your GitHub App credentials and API keys
+# Set APP_ID, PRIVATE_KEY, WEBHOOK_SECRET, and API keys
+
+# Run the bot
 npm start
 ```
 
-### GitHub App Registration
-
-1. Go to your GitHub account settings
-2. Navigate to Developer Settings > GitHub Apps > New GitHub App
-3. Fill in the required information:
-   - App name
-   - Homepage URL (can be repository URL)
-   - Webhook URL (for local development, use a service like [smee.io](https://smee.io))
-   - Permissions:
-     - Repository contents: Read & write
-     - Issues: Read & write
-     - Pull requests: Read & write
-   - Subscribe to events:
-     - Issues
-     - Issue comment
-     - Pull request
-4. Create the app and note the App ID
-5. Generate a private key and download it
-6. Update your `.env` file with the App ID and path to the private key
-
 ### Environment Variables
 
-See the `.env.example` file for all available configuration options. The most important ones are:
-
+#### Core Configuration
 - `APP_ID`: Your GitHub App ID
-- `WEBHOOK_SECRET`: Secret for webhook verification
-- `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`: Required for AI code generation to function
-- `PATCH_TRIGGER_LABEL`: The label that triggers the bot to fix an issue (default: `fix:auto`)
+- `PRIVATE_KEY`: Your GitHub App's private key (contents of the .pem file)
+- `PRIVATE_KEY_PATH`: Alternative to PRIVATE_KEY, specify path to the .pem file (recommended for security)
+- `WEBHOOK_SECRET`: Your GitHub App's webhook secret
+- `WEBHOOK_PROXY_URL`: URL for webhook proxying (for local development with smee.io)
+- `LOG_LEVEL`: Logging level (`debug`, `info`, `warn`, or `error`)
 
-## Usage
+#### API Keys Configuration
+You can configure multiple API providers:
 
-1. Install the GitHub App on your repository
-2. Create or find an issue that can be automatically fixed
-3. Add the trigger label (default: `fix:auto`) to the issue
-4. The bot will:
-   - Comment that it's working on the issue
-   - Use AI to generate a fix
-   - Create a pull request with the changes
-   - Comment on the issue with the PR link
+- **OpenAI Configuration**:
+  - `OPENAI_API_KEY`: Single API key for OpenAI models
+  - `OPENAI_API_KEYS`: Multiple comma-separated keys for load balancing
 
-## Advanced Configuration
+- **Anthropic Configuration**:
+  - `ANTHROPIC_API_KEY`: Single API key for Claude models
+  - `ANTHROPIC_API_KEYS`: Multiple comma-separated keys for load balancing
 
-### Labels
+- **OpenRouter Configuration**:
+  - `OPENROUTER_API_KEY`: API key for accessing multiple models through OpenRouter
 
-- `PATCH_TRIGGER_LABEL`: Primary label that triggers fixes (default: `fix:auto`)
-- `PATCH_ADDITIONAL_TRIGGER_LABELS`: Additional labels that can also trigger fixes
-- `AIDER_PR_LABELS`: Labels to add to created pull requests
+#### Model Configuration
+You can set models globally or per mode:
 
-### Comments
+- **Global model setting**:
+  - `PATCH_MODEL`: Default model for all modes if no mode-specific model is set
 
-- `AIDER_PROCESSING_COMMENT`: Comment to add when processing starts
-- `AIDER_SUCCESS_COMMENT`: Comment to add on successful fix
-- `AIDER_FAILURE_COMMENT`: Comment to add when fix fails
+- **Mode-specific models**:
+  - `PATCH_MODEL_ARCHITECT`: Model for architect mode
+  - `PATCH_MODEL_PATCHER`: Model for patcher mode
+  - `PATCH_MODEL_HYBRID_SECURITY`: Model for security hybrid mode
+  - `PATCH_MODEL_HYBRID_PERFORMANCE`: Model for performance hybrid mode
+  - `PATCH_MODEL_HYBRID_TYPESCRIPT`: Model for TypeScript hybrid mode
 
-### AI Model Configuration
+- **Model provider configuration**:
+  - `PATCH_MODEL_PROVIDER`: Explicitly specify which provider to use (openai, anthropic, openrouter)
+  - `PATCH_MODEL_PROVIDER_ARCHITECT`: Provider for architect mode
+  - `PATCH_MODEL_PROVIDER_PATCHER`: Provider for patcher mode
+  - `PATCH_MODEL_PROVIDER_HYBRID_SECURITY`: Provider for security hybrid mode
+  - `PATCH_MODEL_PROVIDER_HYBRID_PERFORMANCE`: Provider for performance hybrid mode
+  - `PATCH_MODEL_PROVIDER_HYBRID_TYPESCRIPT`: Provider for TypeScript hybrid mode
 
-- `PATCH_MODEL`: LLM model to use (default: `gpt-4o`)
-- `PATCH_EXTRA_ARGS`: Additional arguments to pass to the AI engine
-- `PATCH_TIMEOUT`: Timeout for AI operations in milliseconds (default: 300000)
+- **Model-specific arguments**:
+  - `PATCH_EXTRA_ARGS`: Global extra arguments for Aider
+  - `PATCH_EXTRA_ARGS_ARCHITECT`: Arguments specific to architect mode
+  - `PATCH_EXTRA_ARGS_PATCHER`: Arguments specific to patcher mode
+  - `PATCH_EXTRA_ARGS_HYBRID_SECURITY`: Arguments specific to security mode
 
-### Pull Requests
+### Mode Selection
+To set the default mode and mode selection behavior:
 
-- `AIDER_BRANCH_PREFIX`: Prefix for branches created by the bot (default: `aider-fix-`)
-- `AIDER_PR_TITLE_PREFIX`: Prefix for PR titles (default: `Fix: `)
-- `AIDER_PR_DRAFT`: Whether to create PRs as drafts (default: `false`)
+- `PATCH_DEFAULT_MODE`: Default processing mode (`architect`, `patcher`, or a hybrid mode)
+- `PATCH_ENABLE_MULTIPASS`: Whether to enable multi-pass processing for complex issues
+- `PATCH_MULTIPASS_SEQUENCE`: The sequence of modes for multi-pass processing
 
-## Docker
+## Development
 
-```sh
-# 1. Build container
+```bash
+# Run with hot reload
+npm run dev
+
+# Run tests
+npm test
+```
+
+### Using smee.io for Local Development
+
+1. Go to [smee.io](https://smee.io) and click "Start a new channel"
+2. Copy the URL and set it as `WEBHOOK_PROXY_URL` in your `.env` file
+3. Install the smee client: `npm install -g smee-client`
+4. Run the client: `smee -u https://smee.io/your-channel -t http://localhost:3000/api/github/webhooks`
+5. Start your Probot app in another terminal: `npm start`
+
+## Deployment
+
+### Docker Deployment
+
+```bash
+# Build the Docker image
 docker build -t patchmycode .
 
-# 2. Start container
-docker run -e APP_ID=<app-id> -e PRIVATE_KEY=<pem-value> -e OPENAI_API_KEY=<key> patchmycode
+# Run the Docker container
+docker run -p 3000:3000 --env-file .env patchmycode
 ```
 
-## Troubleshooting
+### Deploying to Services
 
-### AI Backend Installation
-
-This application uses Aider as the AI backend. If you encounter issues, ensure it's correctly installed:
-
-```sh
-pip install aider-chat
-aider --version
-```
-
-### GitHub Authentication
-
-For private repositories, the bot needs authentication. Make sure your GitHub App has the necessary permissions.
-
-### API Keys
-
-Aider requires either an OpenAI or Anthropic API key. Set them in your environment variables:
-
-```
-OPENAI_API_KEY=your-key-here
-# or
-ANTHROPIC_API_KEY=your-key-here
-```
-
-### Using Claude/Anthropic Models
-
-To use Claude models, you need to:
-
-1. Set your Anthropic API key:
-   ```
-   ANTHROPIC_API_KEY=your-anthropic-key-here
-   ```
-
-2. Set the model to a Claude model:
-   ```
-   AIDER_MODEL=claude-3-7-sonnet-20250219
-   ```
-
-3. **Important**: Add the `--use-anthropic` flag to the extra arguments:
-   ```
-   AIDER_EXTRA_ARGS=--use-anthropic
-   ```
-
-All three settings are required for Claude models to work correctly. If you encounter errors about missing OpenAI API keys while using Claude, double-check that you've added the `--use-anthropic` flag to your `AIDER_EXTRA_ARGS`.
-
-## Contributing
-
-If you have suggestions for how probot-aider-bot could be improved, or want to report a bug, open an issue! We'd love all and any contributions.
-
-For more, check out the [Contributing Guide](CONTRIBUTING.md).
+- **Heroku**: Push to Heroku with the Procfile included
+- **Fly.io**: Deploy with the included fly.toml
+- **GitHub Actions**: Deploy using GitHub Actions workflows
+- **Vercel/Netlify**: Deploy serverless with adapter
 
 ## License
 
