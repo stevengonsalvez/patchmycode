@@ -14,6 +14,11 @@ flowchart TD
     PatchClient --> AIEngine[AI Code Assistant]
     AIEngine --> LocalGit[Local Git Operations]
     LocalGit --> GitHubAPI
+    Config[TypeScript Config] --> EventHandlers
+    Config --> GitHubClient
+    Config --> PatchClient
+    ModeSelector[Mode Selector] --> PatchClient
+    ModeSelector --> MultiPassProcessor[Multi-Pass Processor]
 ```
 
 ### Components
@@ -38,12 +43,28 @@ flowchart TD
    - Manages temporary working directories
    - Captures and processes AI-generated output
 
+5. **Configuration Module**
+   - Typed configuration interface (PatchBotConfig)
+   - Environment variable mapping with defaults
+   - Helper functions for different value types
+
+6. **Mode Selector**
+   - Analyzes issues to determine processing mode
+   - Selects appropriate system prompts
+   - Supports different processing strategies
+
+7. **Multi-Pass Processor**
+   - Manages complex processing sequences
+   - Coordinates between different modes
+   - Handles sequential code refinement
+
 ## Key Technical Decisions
 
 1. **TypeScript for Type Safety**
    - Using TypeScript to ensure type safety and improve maintainability
    - Interfaces defined for all major data structures
    - Type checking for GitHub API responses
+   - Type-safe configuration system
 
 2. **Modular Design**
    - Clear separation between GitHub integration and Aider integration
@@ -59,6 +80,11 @@ flowchart TD
    - Secure creation of temporary directories
    - Proper cleanup after operations
    - Isolation between concurrent operations
+
+5. **Environment-based Configuration**
+   - Configuration via environment variables with defaults
+   - Type-safe access to configuration values
+   - Helper functions for parsing different value types
 
 ## Design Patterns in Use
 
@@ -82,6 +108,16 @@ flowchart TD
    - Standardizing error formats between systems
    - Translating between GitHub API and local operations
 
+5. **Strategy Pattern**
+   - Different processing modes as strategies
+   - Mode selection based on issue content
+   - Dynamic behavior based on selected strategy
+
+6. **Configuration Interface Pattern**
+   - TypeScript interface for configuration
+   - Environment variable mapping
+   - Type-safe access to configuration values
+
 ## Component Relationships
 
 1. **Event Handler → GitHub Client**
@@ -103,3 +139,13 @@ flowchart TD
    - GitHub client translates app operations to API calls
    - API responses are processed and standardized
    - Error handling and rate limiting managed by GitHub client
+
+5. **Mode Selector → Patch Client**
+   - Mode selector determines processing strategy
+   - Patch client behavior varies by selected mode
+   - System prompts customized for each mode
+
+6. **Configuration → All Components**
+   - Typed configuration accessed by all components
+   - Environment variables influence component behavior
+   - Default values ensure consistent operation

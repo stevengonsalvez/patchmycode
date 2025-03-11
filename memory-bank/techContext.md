@@ -45,6 +45,20 @@
 - `WEBHOOK_SECRET`: Secret for webhook verification
 - `WEBHOOK_PROXY_URL`: URL for local development webhook forwarding
 - `LOG_LEVEL`: Logging level (debug, info, warn, error)
+- `PATCH_TRIGGER_LABEL`: The label that triggers the bot (default: "patchmycode:fix")
+- `PATCH_ADDITIONAL_TRIGGER_LABELS`: Additional labels that can trigger the bot
+- `PATCH_TIMEOUT`: Maximum processing time in seconds (default: 600)
+- `PATCH_MODEL`: LLM model to use (default: "gpt-4-turbo")
+- `PATCH_DEFAULT_MODE`: Default processing mode (default: "patcher")
+- `PATCH_ENABLE_MULTIPASS`: Whether to enable multi-pass processing (default: true)
+
+### Configuration Module
+The application uses a TypeScript-based configuration system that provides:
+- Type safety through TypeScript interfaces
+- Environment variable overrides with sensible defaults
+- Support for boolean, string, number and array configuration values
+- Centralized configuration management
+- Mode-specific configuration options
 
 ### Setup Steps
 1. Clone the repository
@@ -87,11 +101,14 @@
 "@actions/io": "^1.1.3",
 "@octokit/rest": "^21.1.1",
 "execa": "^9.5.2",
-"probot": "^13.0.1"
+"probot": "^13.0.1",
+"fs-extra": "^11.2.0",
+"chalk": "^5.3.0"
 ```
 
 ### Development Dependencies
 ```
+"@types/fs-extra": "^11.0.4",
 "@types/node": "^20.0.0",
 "nock": "^14.0.0-beta.5",
 "smee-client": "^2.0.0",

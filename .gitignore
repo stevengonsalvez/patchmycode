@@ -6,3 +6,4 @@ npm-debug.log
 coverage
 lib
 .env.archive
+.cursor/mcp.json
