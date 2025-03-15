@@ -464,6 +464,25 @@ export class PatchClient {
     await fs.promises.mkdir(issueDir, { recursive: true });
     
     try {
+      // Extract issue number from the branch name or title
+      let issueNumber: string | null = null;
+      const issueNumberMatch = branchName.match(/issue-(\d+)/) || issueTitle.match(/issue[- ]?#?(\d+)/i);
+      if (issueNumberMatch && issueNumberMatch[1]) {
+        issueNumber = issueNumberMatch[1];
+      }
+      
+      // Generate unique branch name with random hash and issue number
+      const uniqueHash = Math.random().toString(36).substring(2, 8); // 6 character random string
+      const mode = this.options.mode || 'fix';
+      const uniqueBranchName = issueNumber 
+        ? `${mode}-${uniqueHash}-${issueNumber}`
+        : `${mode}-${uniqueHash}-${Date.now().toString().substring(9)}`; // Use last digits of timestamp as fallback
+      
+      console.log(`Using unique branch name: ${uniqueBranchName} (original: ${branchName})`);
+      if (progressCallback) {
+        progressCallback('branch_generated', { name: uniqueBranchName, original: branchName });
+      }
+      
       // Create the git URL with authentication if provided
       let gitUrl = repoUrl;
       if (authToken) {
@@ -492,11 +511,11 @@ export class PatchClient {
         await this.executeCommand('git', ['checkout', baseBranch]);
       }
       
-      console.log(`Creating new branch: ${branchName}`);
+      console.log(`Creating new branch: ${uniqueBranchName}`);
       if (progressCallback) {
-        progressCallback('branch', { name: branchName });
+        progressCallback('branch', { name: uniqueBranchName });
       }
-      await this.executeCommand('git', ['checkout', '-b', branchName]);
+      await this.executeCommand('git', ['checkout', '-b', uniqueBranchName]);
       
       // Create a temporary file with the issue details
       const issueFile = path.join(issueDir, 'ISSUE.md');
@@ -581,6 +600,9 @@ export class PatchClient {
       
       let textOutput = '';
       let stderr = '';
+      let dataBuffer = '';
+      let lastActivityTime = Date.now();
+      let exitDueToUpgrade = false;
       
       // Track activity to detect progress
       let lastActivity = Date.now();
@@ -603,6 +625,15 @@ export class PatchClient {
       aiderProcess.stdout.on('data', (data: Buffer) => {
         try {
           const chunk = data.toString();
+          dataBuffer += chunk;
+          lastActivityTime = Date.now();
+          
+          // Check for upgrade message
+          if (chunk.includes('Re-run aider to use new version')) {
+            console.log('[aider] Detected version upgrade message');
+            exitDueToUpgrade = true;
+          }
+          
           textOutput += chunk;
           console.log(`[aider] ${chunk}`);
           
@@ -769,7 +800,55 @@ export class PatchClient {
           clearTimeout(absoluteMaxTimeout);
           clearInterval(activityInterval);
           clearInterval(healthCheckInterval);
-          resolve(code || 0);
+          
+          if (exitDueToUpgrade) {
+            console.log('[aider] Aider has upgraded. Restarting with new version...');
+            if (progressCallback) {
+              progressCallback('restarting', { reason: 'upgrade' });
+            }
+            
+            // Simply restart the process with the same args
+            console.log('[aider] Restarting Aider after upgrade...');
+            const restartProcess = spawn('aider', args, {
+              cwd: issueDir,
+              env: processEnv,
+              stdio: ['pipe', 'pipe', 'pipe']
+            });
+            
+            // Use the same handlers for the restarted process
+            // This is simplified; in a real implementation you might want to 
+            // extract the process handling to a separate function
+            let restartOutput = '';
+            
+            restartProcess.stdout.on('data', (data) => {
+              const chunk = data.toString();
+              restartOutput += chunk;
+              console.log(`[aider-restart] ${chunk}`);
+              
+              if (progressCallback) {
+                progressCallback('output', { output: chunk });
+              }
+            });
+            
+            restartProcess.stderr.on('data', (data) => {
+              const chunk = data.toString();
+              console.error(`[aider-restart-err] ${chunk}`);
+              
+              if (progressCallback) {
+                progressCallback('error', { error: chunk });
+              }
+            });
+            
+            restartProcess.on('close', (restartCode) => {
+              console.log(`[aider] Restart process exited with code ${restartCode}`);
+              resolve(restartCode ?? 0);
+            });
+            
+            return;
+          }
+          
+          console.log(`[aider] Process exited with code ${code}`);
+          resolve(code ?? 0);
         });
       });
       
@@ -807,14 +886,19 @@ export class PatchClient {
       if (progressCallback) {
         progressCallback('committing', {});
       }
-      await this.executeCommand('git', ['commit', '-m', `Fix: ${issueTitle}\n\nAuto-generated fix by patchmycode.`]);
+      
+      // Create commit message with issue reference
+      const issueReference = issueNumber ? ` #${issueNumber}` : '';
+      const commitMessage = `Fix: ${issueTitle}${issueReference}\n\nAuto-generated fix by patchmycode.`;
+      
+      await this.executeCommand('git', ['commit', '-m', commitMessage]);
       
       // Push the changes
       console.log('Pushing changes...');
       if (progressCallback) {
         progressCallback('pushing', {});
       }
-      await this.executeCommand('git', ['push', '--set-upstream', 'origin', branchName]);
+      await this.executeCommand('git', ['push', '--set-upstream', 'origin', uniqueBranchName]);
       
       // Get the list of changed files
       const changedFiles = stagedChanges.map(line => {
