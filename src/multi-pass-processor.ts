@@ -133,7 +133,7 @@ export class MultiPassProcessor {
         message: result.message,
         changes: result.changes,
         modesUsed: [mode],
-        branchName: branchName
+        branchName: result.branchName
       };
     } catch (error) {
       console.error(`Error in ${mode} mode processing:`, error);
@@ -142,7 +142,7 @@ export class MultiPassProcessor {
         message: `Failed during ${mode} mode: ${error instanceof Error ? error.message : String(error)}`,
         changes: [],
         modesUsed: [mode],
-        branchName: branchName
+        branchName: undefined
       };
     }
   }
@@ -254,17 +254,16 @@ export class MultiPassProcessor {
           message: `First pass (${primaryMode}) successful, but second pass (${secondaryMode}) failed: ${secondaryResult.message}`,
           changes: allChanges,
           modesUsed: modes,
-          branchName: finalBranchName
+          branchName: secondaryResult.branchName
         };
       }
       
-      // Both passes succeeded
       return {
         success: true,
         message: `Successfully applied changes with ${primaryMode} followed by ${secondaryMode} modes`,
         changes: allChanges,
         modesUsed: modes,
-        branchName: finalBranchName
+        branchName: secondaryResult.branchName
       };
     } catch (error) {
       console.error(`Error in multi-pass processing:`, error);
