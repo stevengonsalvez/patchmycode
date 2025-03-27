@@ -186,14 +186,15 @@ This PR was created automatically by patchmycode. Please review the changes care
         `.trim();
         
         // Create a pull request with the changes
+        console.log(`Branch name used for PR: ${result.branchName || 'Using fallback construction'}`);
         const pullRequest = await github.createPullRequest({
           owner,
           repo,
           title: `${config.prTitlePrefix || 'Fix:'}${issueDetails.title}`,
           body: prBody,
-          head: result.modesUsed.length > 1 
+          head: result.branchName || (result.modesUsed.length > 1 
             ? `${result.modesUsed[1]}-on-${result.modesUsed[0]}-${baseBranchName}` // Use the final branch name from multi-pass
-            : `${result.modesUsed[0]}-${baseBranchName}`, // Use the mode-prefixed branch name
+            : `${result.modesUsed[0]}-${baseBranchName}`), // Use the mode-prefixed branch name
           base: defaultBranch,
           draft: config.prDraft || false,
           maintainer_can_modify: true

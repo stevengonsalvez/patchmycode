@@ -17,6 +17,7 @@ export interface ProcessResult {
   message: string;
   changes: string[];
   modesUsed: string[];
+  branchName?: string;
 }
 
 /**
@@ -131,7 +132,8 @@ export class MultiPassProcessor {
         success: result.success,
         message: result.message,
         changes: result.changes,
-        modesUsed: [mode]
+        modesUsed: [mode],
+        branchName: branchName
       };
     } catch (error) {
       console.error(`Error in ${mode} mode processing:`, error);
@@ -139,7 +141,8 @@ export class MultiPassProcessor {
         success: false,
         message: `Failed during ${mode} mode: ${error instanceof Error ? error.message : String(error)}`,
         changes: [],
-        modesUsed: [mode]
+        modesUsed: [mode],
+        branchName: branchName
       };
     }
   }
@@ -196,7 +199,8 @@ export class MultiPassProcessor {
           success: false,
           message: `Failed during ${primaryMode} mode: ${primaryResult.message}`,
           changes: primaryResult.changes,
-          modesUsed: [primaryMode]
+          modesUsed: [primaryMode],
+          branchName: primaryBranchName
         };
       }
       
@@ -249,7 +253,8 @@ export class MultiPassProcessor {
           success: false,
           message: `First pass (${primaryMode}) successful, but second pass (${secondaryMode}) failed: ${secondaryResult.message}`,
           changes: allChanges,
-          modesUsed: modes
+          modesUsed: modes,
+          branchName: finalBranchName
         };
       }
       
@@ -258,7 +263,8 @@ export class MultiPassProcessor {
         success: true,
         message: `Successfully applied changes with ${primaryMode} followed by ${secondaryMode} modes`,
         changes: allChanges,
-        modesUsed: modes
+        modesUsed: modes,
+        branchName: finalBranchName
       };
     } catch (error) {
       console.error(`Error in multi-pass processing:`, error);
@@ -266,7 +272,8 @@ export class MultiPassProcessor {
         success: false,
         message: `Failed during multi-pass processing: ${error instanceof Error ? error.message : String(error)}`,
         changes: [],
-        modesUsed: modes
+        modesUsed: modes,
+        branchName: undefined
       };
     }
   }
@@ -393,4 +400,4 @@ export class MultiPassProcessor {
       }
     };
   }
-} 
+}

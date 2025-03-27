@@ -13,6 +13,7 @@ export interface PatchResult {
   success: boolean;
   message: string;
   changes: string[];
+  branchName?: string;
 }
 
 export interface PatchOptions {
@@ -528,11 +529,23 @@ export class PatchClient {
       const model = this.getModelForCurrentMode();
       const extraArgs = this.getExtraArgsForCurrentMode();
       
+      // Create message with rules
+      let message = `# ${issueTitle}\n\n${issueBody}`;
+      
+      // Add rules if they exist in config
+      if (config.aiderRules && config.aiderRules.length > 0) {
+        message += '\n\n## Development Rules\n';
+        config.aiderRules.forEach(rule => {
+          message += `\n- ${rule}`;
+        });
+        console.log('[aider] Added development rules to message');
+      }
+      
       let args = [
         '--model', model,
         ...this.getModeArgs(),
         ...extraArgs,
-        '--message', `# ${issueTitle}\n\n${issueBody}`
+        '--message', message
       ];
       
       // Filter out any deprecated arguments
@@ -870,7 +883,8 @@ export class PatchClient {
         return {
           success: false,
           message: 'No changes made. The AI couldn\'t find a solution or encountered an error.',
-          changes: []
+          changes: [],
+          branchName: uniqueBranchName
         };
       }
       
@@ -914,7 +928,8 @@ export class PatchClient {
       return {
         success: true,
         message: 'Successfully applied changes to fix the issue.',
-        changes: changedFiles
+        changes: changedFiles,
+        branchName: uniqueBranchName
       };
     } catch (error) {
       console.error('Error fixing issue:', error);
@@ -926,7 +941,8 @@ export class PatchClient {
       return {
         success: false,
         message: `Error: ${error instanceof Error ? error.message : String(error)}`,
-        changes: []
+        changes: [],
+        branchName: undefined
       };
     }
   }

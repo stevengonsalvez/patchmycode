@@ -20,6 +20,9 @@ export interface PatchBotConfig {
   extraArgs?: string[];          // Default additional arguments to pass to the LLM
   modelProvider?: string;        // Default model provider to use (openai, anthropic, openrouter)
   
+  // Aider rules configuration
+  aiderRules?: string[];         // Rules to append to aider message for guiding code generation
+  
   // Mode-specific LLM configuration
   modeModels?: Record<string, string>; // Mapping of modes to specific models
   modeExtraArgs?: Record<string, string[]>; // Mapping of modes to specific extra args
@@ -254,6 +257,13 @@ const config: PatchBotConfig = {
   model: getEnv('PATCH_MODEL', 'gpt-4-turbo'),
   extraArgs: getArrayEnv('PATCH_EXTRA_ARGS'),
   modelProvider: getEnv('PATCH_MODEL_PROVIDER', ''),
+  
+  // Aider rules configuration
+  aiderRules: getArrayEnv('PATCH_AIDER_RULES', [
+    'If a new package is introduced, ensure it is added in package.json, requirements.txt, gradle, maven file or whatever is used appropriately as dependency config',
+    'If there is a package or library already used, stick with that instead of introducing a new library (e.g., if Material UI is used, do not introduce Shadcn UI or Radix)',
+    'Follow existing code style and patterns found in the codebase'
+  ]),
   
   // Mode-specific LLM configuration
   modeModels: getModeModels(),
