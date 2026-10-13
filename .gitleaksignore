@@ -1,0 +1,4 @@
+# Historical gitleaks hits present when this gate was added (2026-10-13).
+# Reviewed as test fixtures and placeholders. A new leak is not in this list and fails CI.
+# Remove a line once its value is rotated or the file is gone. Do not add a line to hide a new leak.
+693ecffeba64c08d66a37889f4443f0a4b410f85:test/fixtures/mock-cert.pem:private-key:1
